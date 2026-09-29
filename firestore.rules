@@ -1,0 +1,100 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny all unmatched documents
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Connection test document for health checks
+    match /test/{docId} {
+      allow read, write: if true;
+    }
+
+    // Schools configuration
+    match /schools/{schoolId} {
+      allow read, write: if true;
+    }
+
+    // User collection (canonical Indonesian schema)
+    match /user/{userId} {
+      allow read, write: if true;
+    }
+
+    // Jadwal piket collection (canonical Indonesian schema)
+    match /jadwal/{jadwalId} {
+      allow read, write: if true;
+    }
+
+    // Buku Piket collection (canonical Indonesian schema)
+    match /bukuPiket/{bukuPiketId} {
+      allow read, write: if true;
+    }
+
+    // Kejadian / Laporan Insiden collection (canonical Indonesian schema)
+    match /kejadian/{kejadianId} {
+      allow read, write: if true;
+    }
+
+    // Duty schedules
+    match /duty_schedules/{scheduleId} {
+      allow read, write: if true;
+    }
+
+    // Presensi Attendances
+    match /attendances/{attendanceId} {
+      allow read, write: if true;
+    }
+
+    // Buku Piket Logbooks
+    match /logbooks/{logbookId} {
+      allow read, write: if true;
+    }
+
+    // Kejadian Incidents
+    match /incidents/{incidentId} {
+      allow read, write: if true;
+    }
+
+    // Users & Personnel
+    match /users/{userId} {
+      allow read, write: if true;
+    }
+
+    // Duty Posts
+    match /duty_posts/{postId} {
+      allow read, write: if true;
+    }
+
+    // Shifts
+    match /shifts/{shiftId} {
+      allow read, write: if true;
+    }
+
+    // Handovers & Serah Terima
+    match /handovers/{handoverId} {
+      allow read, write: if true;
+    }
+
+    // Replacements
+    match /replacements/{replacementId} {
+      allow read, write: if true;
+    }
+
+    // Notifications
+    match /notifications/{notifId} {
+      allow read, write: if true;
+    }
+
+    // System Settings
+    match /system_settings/{settingId} {
+      allow read, write: if true;
+    }
+
+    // Panic Mode System Snapshots & Disaster Recovery Backups
+    match /system_snapshots/{snapshotId} {
+      allow read, write: if true;
+    }
+  }
+}

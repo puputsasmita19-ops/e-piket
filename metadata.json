@@ -1,0 +1,12 @@
+{
+  "name": "e-Piket Guru - Sistem Piket & Buku Piket Digital Sekolah",
+  "description": "Aplikasi pengelolaan jadwal piket guru dan tenaga kependidikan, check-in real-time, buku piket digital, serah terima tugas, dokumentasi kejadian, dan monitoring kepala sekolah.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

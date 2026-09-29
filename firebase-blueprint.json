@@ -1,0 +1,221 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Data akun pengguna, guru, tendik, dan administrator",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nama": { "type": "string" },
+        "username": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "kepsek", "guru", "tendik"] },
+        "nip": { "type": "string" },
+        "nuptk": { "type": "string" },
+        "jabatan": { "type": "string" },
+        "nomorHP": { "type": "string" },
+        "pin": { "type": "string" },
+        "statusAktif": { "type": "boolean" }
+      },
+      "required": ["id", "nama", "role", "statusAktif"]
+    },
+    "DutyPost": {
+      "title": "DutyPost",
+      "description": "Master data lokasi pos piket sekolah",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "namaPos": { "type": "string" },
+        "lokasi": { "type": "string" },
+        "deskripsi": { "type": "string" },
+        "petugasRequiredCount": { "type": "number" },
+        "statusAktif": { "type": "boolean" }
+      },
+      "required": ["id", "namaPos", "statusAktif"]
+    },
+    "Shift": {
+      "title": "Shift",
+      "description": "Master data jam shift piket harian",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "namaShift": { "type": "string" },
+        "jamMulai": { "type": "string" },
+        "jamSelesai": { "type": "string" },
+        "statusAktif": { "type": "boolean" }
+      },
+      "required": ["id", "namaShift", "jamMulai", "jamSelesai", "statusAktif"]
+    },
+    "School": {
+      "title": "School",
+      "description": "Informasi profil dan pengaturan sekolah",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nama": { "type": "string" },
+        "npsn": { "type": "string" },
+        "alamat": { "type": "string" },
+        "kepalaSekolah": { "type": "string" },
+        "nipKepalaSekolah": { "type": "string" },
+        "toleransiKeterlambatanMenit": { "type": "number" },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "radiusPresensiMeter": { "type": "number" }
+      },
+      "required": ["id", "nama", "toleransiKeterlambatanMenit"]
+    },
+    "DutySchedule": {
+      "title": "DutySchedule",
+      "description": "Jadwal penugasan piket guru harian",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tanggal": { "type": "string" },
+        "postId": { "type": "string" },
+        "postName": { "type": "string" },
+        "shiftId": { "type": "string" },
+        "shiftName": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "status": { "type": "string", "enum": ["belum_checkin", "sedang_bertugas", "sudah_checkout", "terlambat", "digantikan"] },
+        "jamMulai": { "type": "string" },
+        "jamSelesai": { "type": "string" }
+      },
+      "required": ["id", "tanggal", "postId", "userId", "status"]
+    },
+    "Attendance": {
+      "title": "Attendance",
+      "description": "Catatan presensi check-in dan check-out piket",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "scheduleId": { "type": "string" },
+        "userId": { "type": "string" },
+        "tanggal": { "type": "string" },
+        "checkInAt": { "type": "string" },
+        "checkOutAt": { "type": "string" },
+        "status": { "type": "string" },
+        "isLate": { "type": "boolean" },
+        "lateMinutes": { "type": "number" },
+        "fotoCheckIn": { "type": "string" },
+        "fotoCheckOut": { "type": "string" },
+        "checkInNotes": { "type": "string" },
+        "checkOutNotes": { "type": "string" },
+        "durasiMenit": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "scheduleId", "userId", "tanggal", "checkInAt", "status"]
+    },
+    "Logbook": {
+      "title": "Logbook",
+      "description": "Buku catatan harian pelaksanaan piket guru",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "scheduleId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "postId": { "type": "string" },
+        "postName": { "type": "string" },
+        "tanggal": { "type": "string" },
+        "waktuCatat": { "type": "string" },
+        "kondisiSelamaBertugas": { "type": "string" },
+        "tamuDiterimaCount": { "type": "number" },
+        "siswaTerlambatCount": { "type": "number" },
+        "siswaIzinKeluarCount": { "type": "number" },
+        "tindakLanjut": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "scheduleId", "userId", "tanggal", "kondisiSelamaBertugas"]
+    },
+    "Incident": {
+      "title": "Incident",
+      "description": "Laporan kejadian khusus, ketertiban, dan kedaruratan di sekolah",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tanggal": { "type": "string" },
+        "waktu": { "type": "string" },
+        "jenisKejadian": { "type": "string" },
+        "prioritas": { "type": "string", "enum": ["rendah", "sedang", "tinggi", "darurat"] },
+        "lokasi": { "type": "string" },
+        "deskripsi": { "type": "string" },
+        "tindakanAwal": { "type": "string" },
+        "pelaporId": { "type": "string" },
+        "pelaporNama": { "type": "string" },
+        "status": { "type": "string", "enum": ["tercatat", "ditindaklanjuti", "selesai"] },
+        "pentingKepalaSekolah": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "tanggal", "waktu", "jenisKejadian", "prioritas", "deskripsi", "pelaporId", "status"]
+    },
+    "SystemSettings": {
+      "title": "SystemSettings",
+      "description": "Pengaturan sistem, sinkronisasi cloud, dan toleransi",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "allowGpsRadiusCheck": { "type": "boolean" },
+        "gpsRadiusMeters": { "type": "number" },
+        "schoolLatitude": { "type": "number" },
+        "schoolLongitude": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id"]
+    }
+  },
+  "firestore": {
+    "/user/{userId}": {
+      "schema": "User",
+      "description": "Data akun pengguna, guru piket, dan staf sekolah (koleksi user)"
+    },
+    "/jadwal/{jadwalId}": {
+      "schema": "DutySchedule",
+      "description": "Jadwal penugasan piket guru harian (koleksi jadwal)"
+    },
+    "/bukuPiket/{bukuPiketId}": {
+      "schema": "Logbook",
+      "description": "Buku catatan harian pelaksanaan piket guru (koleksi bukuPiket)"
+    },
+    "/kejadian/{kejadianId}": {
+      "schema": "Incident",
+      "description": "Laporan kejadian ketertiban dan kedaruratan (koleksi kejadian)"
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Data akun pengguna dan guru piket"
+    },
+    "/duty_posts/{postId}": {
+      "schema": "DutyPost",
+      "description": "Data lokasi pos piket sekolah"
+    },
+    "/shifts/{shiftId}": {
+      "schema": "Shift",
+      "description": "Data jam operasional shift piket"
+    },
+    "/schools/{schoolId}": {
+      "schema": "School",
+      "description": "Data profil sekolah dan geofencing"
+    },
+    "/duty_schedules/{scheduleId}": {
+      "schema": "DutySchedule",
+      "description": "Jadwal petugas piket harian"
+    },
+    "/attendances/{attendanceId}": {
+      "schema": "Attendance",
+      "description": "Data presensi check-in dan selfie"
+    },
+    "/logbooks/{logbookId}": {
+      "schema": "Logbook",
+      "description": "Entri catatan buku piket guru"
+    },
+    "/incidents/{incidentId}": {
+      "schema": "Incident",
+      "description": "Laporan kejadian atau ketertiban"
+    },
+    "/system_settings/{settingId}": {
+      "schema": "SystemSettings",
+      "description": "Konfigurasi sistem sekolah"
+    }
+  }
+}
