@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, HardDrive, MapPin, ShieldCheck, Clock, Smartphone, Save, CheckCircle2, RefreshCw, Database, Cloud, Zap, ExternalLink, AlertCircle, Check, Flame, Bot, FolderSync, Sun, Moon, Palette, Eye, School as SchoolIcon, Upload, User, Users, Image as ImageIcon, Lock, ShieldAlert, Sliders, Volume2, Trash2 } from 'lucide-react';
+import { Settings, HardDrive, MapPin, ShieldCheck, Clock, Smartphone, Save, CheckCircle2, RefreshCw, Database, Cloud, Zap, ExternalLink, AlertCircle, Check, Flame, Bot, FolderSync, Sun, Moon, Palette, Eye, School as SchoolIcon, Upload, User, Users, Image as ImageIcon, Lock, ShieldAlert, Sliders, Volume2, Trash2, RotateCcw, Sparkles, X } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -10,6 +10,7 @@ import { antiFraudService } from '../../services/antiFraudService';
 import { IncidentPhotoCacheModal } from '../common/IncidentPhotoCacheModal';
 import { SchoolGpsConfigPanel } from '../admin/SchoolGpsConfigPanel';
 import { incidentPhotoCache } from '../../services/incidentPhotoCacheService';
+import { cacheService, CacheStats } from '../../services/cacheService';
 import { 
   autoSyncDatabaseToDrive, 
   listDrivePicketFiles, 
@@ -40,7 +41,8 @@ export const PengaturanSistem: React.FC = () => {
     schedules,
     incidents,
     logbooks,
-    createEmergencySnapshot
+    createEmergencySnapshot,
+    recordAudit
   } = useData();
 
   const { 
@@ -140,6 +142,41 @@ export const PengaturanSistem: React.FC = () => {
 
   const refreshCacheStats = () => {
     incidentPhotoCache.getCacheStats(incidents).then(setPhotoCacheStats).catch(console.warn);
+  };
+
+  // Safe Local Cache Cleaner state
+  const [safeCacheStats, setSafeCacheStats] = useState<CacheStats>(() => cacheService.getCacheStats());
+  const [isClearingCache, setIsClearingCache] = useState<boolean>(false);
+  const [showClearCacheModal, setShowClearCacheModal] = useState<boolean>(false);
+  const [clearCacheResult, setClearCacheResult] = useState<string | null>(null);
+
+  const refreshSafeCacheStats = () => {
+    setSafeCacheStats(cacheService.getCacheStats());
+  };
+
+  useEffect(() => {
+    refreshSafeCacheStats();
+  }, [activeTab]);
+
+  const handleExecuteClearCache = async () => {
+    setIsClearingCache(true);
+    setShowClearCacheModal(false);
+    try {
+      haptic.medium();
+      const result = cacheService.clearSafeLocalCache();
+      refreshSafeCacheStats();
+      setClearCacheResult(result.message);
+      showSuccessToast(result.message, 'Pembersihan Cache Berhasil');
+      recordAudit?.(
+        'Pembersihan Cache Lokal',
+        'PengaturanSistem',
+        `Pembersihan cache lokal mandiri berhasil: ${result.itemsCleared} item dibersihkan (${result.formattedBytesFreed}). Modul MasterData distabilkan.`
+      );
+    } catch (err: any) {
+      showErrorToast(err.message || 'Gagal membersihkan cache lokal.');
+    } finally {
+      setIsClearingCache(false);
+    }
   };
 
   useEffect(() => {
@@ -1306,6 +1343,115 @@ export const PengaturanSistem: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            {/* Card: Safe Local Cache Cleaner & Module Stability */}
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs p-6 space-y-5 transition-colors">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-teal-500/10 text-teal-600 dark:bg-teal-950/60 dark:text-teal-400">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <span>Bersihkan Cache Lokal &amp; Stabilisasi Modul</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                        ● Aman (Data Cloud Terlindungi)
+                      </span>
+                    </h3>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Menghapus data sementara peramban (filter pencarian, memori sesi, draft lokal) secara aman tanpa menghapus data yang sudah tersinkronisasi ke Cloud Firestore.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={refreshSafeCacheStats}
+                    title="Segarkan data metrik cache"
+                    className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition cursor-pointer"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowClearCacheModal(true)}
+                    disabled={isClearingCache}
+                    className="px-4 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-md shadow-teal-600/20 transition active:scale-95 cursor-pointer disabled:opacity-50"
+                  >
+                    <RotateCcw className={`w-3.5 h-3.5 ${isClearingCache ? 'animate-spin' : ''}`} />
+                    <span>{isClearingCache ? 'Membersihkan...' : 'Bersihkan Cache Lokal'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Status Diagnostics */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Item Cache Sementara</span>
+                  <p className="font-sans text-slate-900 dark:text-slate-100 font-bold text-sm">
+                    {safeCacheStats.sessionStorageItems + safeCacheStats.tempLocalStorageKeys} Berkas Sementara
+                  </p>
+                  <span className="text-[10.5px] text-slate-500 dark:text-slate-400 block">
+                    {safeCacheStats.sessionStorageItems} Sesi + {safeCacheStats.tempLocalStorageKeys} Filter UI
+                  </span>
+                </div>
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Estimasi Ukuran Cache</span>
+                  <p className="font-sans text-teal-700 dark:text-teal-400 font-bold text-sm">
+                    {safeCacheStats.formattedSize}
+                  </p>
+                  <span className="text-[10.5px] text-slate-500 dark:text-slate-400 block">
+                    Ruang penyimpanan sementara
+                  </span>
+                </div>
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Integritas MasterData</span>
+                  <p className={`font-sans font-bold text-sm flex items-center gap-1 ${
+                    safeCacheStats.isMasterDataHealthy ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-500'
+                  }`}>
+                    <ShieldCheck className="w-4 h-4 shrink-0" />
+                    <span>{safeCacheStats.isMasterDataHealthy ? 'Stabil & Terverifikasi' : 'Perlu Refresh'}</span>
+                  </p>
+                  <span className="text-[10.5px] text-slate-500 dark:text-slate-400 block">
+                    Struktur data sekolah & guru
+                  </span>
+                </div>
+              </div>
+
+              {clearCacheResult && (
+                <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/40 rounded-2xl border border-emerald-200 dark:border-emerald-800/70 text-xs text-emerald-900 dark:text-emerald-200 flex items-center gap-2.5 animate-in fade-in">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <span>{clearCacheResult}</span>
+                </div>
+              )}
+
+              {/* Safety Guarantee Info */}
+              <div className="p-4 bg-teal-50/50 dark:bg-teal-950/20 rounded-2xl border border-teal-100 dark:border-teal-900/30 text-xs text-teal-950 dark:text-teal-200 space-y-2">
+                <div className="flex items-center gap-2 font-bold text-teal-900 dark:text-teal-200">
+                  <ShieldCheck className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0" />
+                  <span>Jaminan Keamanan Data (Zero-Loss Guarantee):</span>
+                </div>
+                <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-teal-800 dark:text-teal-300">
+                  <li className="flex items-center gap-1.5">
+                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>Akun login &amp; identitas pengguna aman</span>
+                  </li>
+                  <li className="flex items-center gap-1.5">
+                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>Master guru, pos, shift &amp; tahun ajaran utuh</span>
+                  </li>
+                  <li className="flex items-center gap-1.5">
+                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>Sinkronisasi database Cloud Firestore terlindungi</span>
+                  </li>
+                  <li className="flex items-center gap-1.5">
+                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>Membersihkan cache filter string penyebab konflik</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
           </div>
         )}
 
@@ -1620,6 +1766,68 @@ export const PengaturanSistem: React.FC = () => {
         isOpen={showPanicModal}
         onClose={() => setShowPanicModal(false)}
       />
+
+      {/* SAFE LOCAL CACHE CLEANUP CONFIRMATION MODAL */}
+      {showClearCacheModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-md w-full p-6 space-y-5 border border-teal-200 dark:border-teal-900/80 animate-in zoom-in-95">
+            <div className="flex items-start justify-between">
+              <div className="p-3 bg-teal-100 dark:bg-teal-950 text-teal-600 dark:text-teal-400 rounded-2xl border border-teal-200 dark:border-teal-800 shrink-0">
+                <Sparkles className="w-6 h-6 animate-pulse" />
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowClearCacheModal(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                Bersihkan Cache Lokal Aplikasi?
+              </h3>
+              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                Tindakan ini akan mengosongkan riwayat filter sementara dan cache memori sesi peramban untuk menstabilkan modul MasterData.
+              </p>
+            </div>
+
+            <div className="p-3.5 bg-slate-50 dark:bg-slate-800/70 rounded-2xl border border-slate-200 dark:border-slate-700 text-xs space-y-2">
+              <span className="font-bold text-slate-800 dark:text-slate-200 block">Status Data:</span>
+              <ul className="space-y-1 text-slate-600 dark:text-slate-300 text-[11.5px]">
+                <li className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span><strong>{safeCacheStats.sessionStorageItems + safeCacheStats.tempLocalStorageKeys} item</strong> cache sementara akan dihapus</span>
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>Data Cloud Firestore &amp; Master Guru <strong>100% aman</strong></span>
+                </li>
+              </ul>
+            </div>
+
+            <div className="flex items-center gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowClearCacheModal(false)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteClearCache}
+                disabled={isClearingCache}
+                className="flex-1 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-lg shadow-teal-600/30 flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer disabled:opacity-50"
+              >
+                <RotateCcw className={`w-3.5 h-3.5 ${isClearingCache ? 'animate-spin' : ''}`} />
+                <span>{isClearingCache ? 'Membersihkan...' : 'Ya, Bersihkan'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
 
 

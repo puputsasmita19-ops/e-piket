@@ -25,6 +25,7 @@ import { antiFraudService } from './services/antiFraudService';
 import { initGlobalHapticFeedback } from './utils/feedback';
 import { showSuccessToast } from './utils/toast';
 import { PanelLeftOpen } from 'lucide-react';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 // Lazy load modules for high-performance mobile execution & tiny initial bundle
 const AdminDashboard = lazy(() => import('./components/dashboards/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
@@ -361,7 +362,15 @@ const MainLayout: React.FC = () => {
         return <JadwalPiket />;
 
       case 'master-data':
-        return <MasterData />;
+        return (
+          <ErrorBoundary
+            moduleName="Manajemen Data"
+            isModuleLevel
+            onNavigateHome={() => setActiveTab('dashboard')}
+          >
+            <MasterData />
+          </ErrorBoundary>
+        );
 
       case 'laporan':
         return <Laporan />;
