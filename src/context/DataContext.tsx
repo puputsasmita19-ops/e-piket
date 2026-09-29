@@ -982,13 +982,26 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const now = new Date();
     const nowIso = now.toISOString();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
-    // Check if late based on shift start time
+    // Strict start time enforcement: User CANNOT check in before scheduled jamMulai
+    if (schedule.jamMulai) {
+      const [startHour, startMin] = schedule.jamMulai.split(':').map(Number);
+      const shiftStartMinutes = startHour * 60 + startMin;
+
+      if (currentMinutes < shiftStartMinutes) {
+        return {
+          success: false,
+          message: `Belum waktunya Absen Mulai Piket. Sesuai jadwal, presensi baru dibuka tepat pada jam ${schedule.jamMulai} WIB.`
+        };
+      }
+    }
+
+    // Check if late based on shift start time + tolerance
     let isLate = false;
     let lateMinutes = 0;
     if (schedule.jamMulai) {
       const [startHour, startMin] = schedule.jamMulai.split(':').map(Number);
-      const currentMinutes = now.getHours() * 60 + now.getMinutes();
       const shiftMinutes = startHour * 60 + startMin;
       const tolerance = school.toleransiKeterlambatanMenit || 15;
 
@@ -1126,6 +1139,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const now = new Date();
     const nowIso = now.toISOString();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+    // Strict end time enforcement: User CANNOT check out before scheduled jamSelesai
+    if (schedule.jamSelesai) {
+      const [endHour, endMin] = schedule.jamSelesai.split(':').map(Number);
+      const shiftEndMinutes = endHour * 60 + endMin;
+
+      if (currentMinutes < shiftEndMinutes) {
+        return {
+          success: false,
+          message: `Belum waktunya Absen Selesai Piket. Sesuai jadwal, presensi selesai baru dibuka tepat pada jam ${schedule.jamSelesai} WIB.`
+        };
+      }
+    }
 
     const attendance = attendances.find((a) => a.scheduleId === scheduleId);
     let durasiMenit = 0;

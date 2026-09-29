@@ -253,54 +253,6 @@ export const Dokumentasi: React.FC = () => {
         </div>
       </div>
 
-      {/* Google Drive Status Banner */}
-      <div className="bg-gradient-to-r from-emerald-950 via-teal-950 to-slate-900 text-white p-6 rounded-3xl border border-emerald-800/80 shadow-xl relative overflow-hidden">
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5">
-            <div className="p-3 bg-white/10 rounded-2xl border border-white/20 text-emerald-300 shrink-0">
-              <HardDrive className="w-7 h-7" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-sm sm:text-base font-extrabold text-white">
-                  {isGoogleDriveConnected ? 'Google Drive Sekolah Terhubung & Aktif' : 'Google Drive Siap Dihubungkan'}
-                </h3>
-                <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold uppercase ${
-                  isGoogleDriveConnected 
-                    ? 'bg-emerald-500/30 text-emerald-200 border border-emerald-400/40' 
-                    : 'bg-amber-500/30 text-amber-200 border border-amber-400/40'
-                }`}>
-                  {isGoogleDriveConnected ? 'OAuth 2.0 Connected' : 'Belum Login'}
-                </span>
-              </div>
-              <p className="text-xs text-emerald-200/90 mt-1">
-                Folder Induk: <code className="bg-black/40 px-2 py-0.5 rounded font-mono text-[11px] text-amber-300">
-                  {systemSettings.googleDrive.folderHierarchyTemplate}
-                </code>
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 shrink-0">
-            {!isGoogleDriveConnected ? (
-              <button
-                type="button"
-                onClick={connectGoogleDrive}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-slate-900 font-bold text-xs hover:bg-slate-100 shadow-md transition active:scale-95 cursor-pointer"
-              >
-                <Cloud className="w-4 h-4 text-emerald-600" />
-                <span>Hubungkan Akun Google Drive</span>
-              </button>
-            ) : (
-              <div className="text-xs text-right">
-                <span className="text-[10px] text-emerald-300 uppercase block font-semibold">Akun Google Aktif:</span>
-                <span className="font-mono text-white font-bold">{googleDriveUser?.email}</span>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
       {uploadSuccess && (
         <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 dark:bg-emerald-950/60 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-200 flex items-center gap-2.5 animate-in fade-in">
           <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />

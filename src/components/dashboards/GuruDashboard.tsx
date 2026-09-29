@@ -273,9 +273,6 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
         </div>
       </div>
 
-      {/* 15-MINUTE AUTOMATIC PUSH NOTIFICATION REMINDER BANNER */}
-      <PiketReminderNotification />
-
       {/* ONE-TAP INSTANT CHECK-IN WIDGET */}
       <PiketInstanWidget />
 
@@ -324,18 +321,21 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
               {myTodaySchedule.notes ? (
                 <p><strong>Catatan Tugas:</strong> {myTodaySchedule.notes}</p>
               ) : (
-                <p>Jalankan protokol piket 5S, pengawasan gerbang/koridor, serta presensi selfie realtime ber-GPS.</p>
+                <p>Jalankan protokol piket 5S, pengawasan gerbang/koridor, serta presensi kehadiran piket digital.</p>
               )}
             </div>
 
             <div className="w-full sm:w-auto">
               {myTodaySchedule.status === 'sedang_bertugas' ? (
                 <button
-                  onClick={() => setSelfieModalState({ isOpen: true, mode: 'checkout', schedule: myTodaySchedule })}
+                  onClick={async () => {
+                    const res = await checkOut(myTodaySchedule.id, 'Selesai piket');
+                    alert(res.message);
+                  }}
                   className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-sm shadow-xl shadow-rose-600/30 transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <Camera className="w-5 h-5" />
-                  <span>CHECK-OUT DENGAN SELFIE</span>
+                  <CheckCircle2 className="w-5 h-5" />
+                  <span>ABSEN SELESAI PIKET</span>
                 </button>
               ) : myTodaySchedule.status === 'sudah_checkout' ? (
                 <button
@@ -347,11 +347,14 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
                 </button>
               ) : (
                 <button
-                  onClick={() => setSelfieModalState({ isOpen: true, mode: 'checkin', schedule: myTodaySchedule })}
+                  onClick={async () => {
+                    const res = await checkIn(myTodaySchedule.id, 'Absen Mulai Piket');
+                    alert(res.message);
+                  }}
                   className="w-full sm:w-auto px-7 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm shadow-xl shadow-emerald-600/40 transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <Camera className="w-4 h-4" />
-                  <span>CHECK-IN SELFIE & GPS REALTIME</span>
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>ABSEN MULAI PIKET</span>
                 </button>
               )}
             </div>

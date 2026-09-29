@@ -287,45 +287,7 @@ const MainLayout: React.FC = () => {
     };
   }, [isAuthenticated, schedules, currentUser?.id, currentRole]);
 
-  // Periodic Automated Push Notification Daemon for Non-Admin Roles (Interval: 5, 10, or 15 mins)
-  useEffect(() => {
-    if (!isAuthenticated || currentRole === 'admin') return;
 
-    const intervalMins = systemSettings?.autoPushNotificationIntervalMinutes ?? 15;
-    if (!intervalMins || intervalMins <= 0) return;
-
-    const intervalMs = intervalMins * 60 * 1000;
-
-    const fireAutoNotification = () => {
-      const now = new Date();
-      const timeStr = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-      const title = `⏰ Pengingat Piket Otomatis (${timeStr} WIB)`;
-      const body = `Halo Bpk/Ibu ${currentUser?.nama || 'Petugas Piket'}, pastikan Anda memeriksa jadwal piket, check-in di pos tugas, dan mengisi entri Buku Piket Digital.`;
-
-      // Web Push Notification to OS / Browser
-      notificationService.sendNotification(title, {
-        body,
-        tag: `auto-push-reminder-${currentUser?.id}-${Date.now()}`
-      });
-
-      // In-app toast banner
-      showSuccessToast(`${title}: ${body}`);
-    };
-
-    // First reminder after 1 minute, then repeat every configured interval (5, 10, or 15 mins)
-    const initialTimer = setTimeout(() => {
-      fireAutoNotification();
-    }, 60000);
-
-    const recurringTimer = setInterval(() => {
-      fireAutoNotification();
-    }, intervalMs);
-
-    return () => {
-      clearTimeout(initialTimer);
-      clearInterval(recurringTimer);
-    };
-  }, [isAuthenticated, currentRole, currentUser?.id, currentUser?.nama, systemSettings?.autoPushNotificationIntervalMinutes]);
 
   // User confirmed exit from the app
   const handleConfirmExit = () => {

@@ -124,9 +124,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, on
         </div>
       </div>
 
-      {/* 15-MINUTE AUTOMATIC PUSH NOTIFICATION REMINDER BANNER */}
-      <PiketReminderNotification />
-
       {/* REAL-TIME INTERACTIVE LEAFLET GEOFENCE MAP */}
       <PetaLokasiMap />
 

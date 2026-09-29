@@ -240,6 +240,15 @@ export const PiketInstanWidget: React.FC<PiketInstanWidgetProps> = ({
     }
   };
 
+  const isPastEndTime = useMemo(() => {
+    if (!myTodaySchedule || !myTodaySchedule.jamSelesai) return false;
+    const [endH, endM] = myTodaySchedule.jamSelesai.split(':').map(Number);
+    const endMinutes = endH * 60 + endM;
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    return currentMinutes > endMinutes;
+  }, [myTodaySchedule]);
+
   // Execute 1-Click Quick Check-Out
   const handleQuickCheckOut = async () => {
     if (!myTodaySchedule || loading) return;
@@ -249,7 +258,7 @@ export const PiketInstanWidget: React.FC<PiketInstanWidgetProps> = ({
     haptic.medium();
 
     try {
-      const res = await checkOut(myTodaySchedule.id, 'Selesai piket (Quick-Checkout)', currentUser?.foto);
+      const res = await checkOut(myTodaySchedule.id, 'Selesai piket (Quick-Checkout)');
       if (res.success) {
         haptic.success();
         sound.playSuccess();
@@ -257,9 +266,13 @@ export const PiketInstanWidget: React.FC<PiketInstanWidgetProps> = ({
         if (onSuccessCheckOut) {
           onSuccessCheckOut();
         }
+      } else {
+        sound.playWarning();
+        alert(res.message);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('Quick check-out error:', e);
+      alert('Terjadi kesalahan saat memproses Check-Out.');
     } finally {
       setLoading(false);
     }
@@ -276,6 +289,13 @@ export const PiketInstanWidget: React.FC<PiketInstanWidgetProps> = ({
       <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-emerald-950 via-teal-950 to-slate-900 text-white shadow-xl border border-emerald-500/40 relative overflow-hidden space-y-4 animate-in fade-in">
         {/* Background glow effects */}
         <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+        
+        {isPastEndTime && (
+          <div className="p-3 bg-rose-500/20 border border-rose-400/50 rounded-2xl text-rose-200 text-xs font-bold flex items-center gap-2 animate-bounce">
+            <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
+            <span>⚠️ Waktu piket telah selesai (Jadwal selesai jam {myTodaySchedule?.jamSelesai} WIB). Harap segera melakukan Absen Selesai Piket!</span>
+          </div>
+        )}
         
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
