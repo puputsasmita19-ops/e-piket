@@ -130,7 +130,7 @@ interface DataContextType {
   deleteReplacement: (id: string) => Promise<void>;
   adminManualCheckIn: (
     scheduleId: string,
-    status: 'sedang_bertugas' | 'terlambat' | 'sakit' | 'izin' | 'lowbat_tunggu' | 'sudah_checkout' | 'belum_checkin',
+    status: 'sedang_bertugas' | 'terlambat' | 'sakit' | 'izin' | 'lowbat_tunggu',
     notes: string
   ) => Promise<{ success: boolean; message: string }>;
   
@@ -209,16 +209,12 @@ const saveToStorage = <T,>(key: string, data: T) => {
 };
 
 const mergeListsById = <T extends { id: string }>(prev: T[], next: T[]): T[] => {
-  if (!next || next.length === 0) return prev.filter((p) => p && p.id);
+  if (next.length === 0) return prev;
   const map = new Map<string, T>();
-  prev.forEach((item) => {
-    if (item && item.id) map.set(item.id, item);
-  });
+  prev.forEach((item) => map.set(item.id, item));
   next.forEach((item) => {
-    if (item && item.id) {
-      const existing = map.get(item.id);
-      map.set(item.id, existing ? { ...existing, ...item } : item);
-    }
+    const existing = map.get(item.id);
+    map.set(item.id, existing ? { ...existing, ...item } : item);
   });
   return Array.from(map.values());
 };
@@ -552,7 +548,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubCanonicalJadwal = onSnapshot(collection(db, 'jadwal'), (snapshot) => {
       if (!snapshot.empty) {
         const loaded: DutySchedule[] = [];
-        snapshot.forEach((d) => loaded.push({ id: d.id, ...(d.data() as any) } as DutySchedule));
+        snapshot.forEach((d) => loaded.push(d.data() as DutySchedule));
         setSchedules((prev) => mergeListsById(prev, loaded));
       }
     }, (err) => console.warn('jadwal onSnapshot error:', err));
@@ -560,7 +556,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubSchedules = onSnapshot(collection(db, 'duty_schedules'), (snapshot) => {
       if (!snapshot.empty) {
         const loaded: DutySchedule[] = [];
-        snapshot.forEach((d) => loaded.push({ id: d.id, ...(d.data() as any) } as DutySchedule));
+        snapshot.forEach((d) => loaded.push(d.data() as DutySchedule));
         setSchedules((prev) => mergeListsById(prev, loaded));
       }
     }, (err) => console.warn('duty_schedules onSnapshot error:', err));
@@ -568,7 +564,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubAttendances = onSnapshot(collection(db, 'attendances'), (snapshot) => {
       if (!snapshot.empty) {
         const loaded: Attendance[] = [];
-        snapshot.forEach((d) => loaded.push({ id: d.id, ...(d.data() as any) } as Attendance));
+        snapshot.forEach((d) => loaded.push(d.data() as Attendance));
         setAttendances((prev) => mergeListsById(prev, loaded));
       }
     }, (err) => console.warn('attendances onSnapshot error:', err));
@@ -576,7 +572,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubCanonicalBukuPiket = onSnapshot(collection(db, 'bukuPiket'), (snapshot) => {
       if (!snapshot.empty) {
         const loaded: Logbook[] = [];
-        snapshot.forEach((d) => loaded.push({ id: d.id, ...(d.data() as any) } as Logbook));
+        snapshot.forEach((d) => loaded.push(d.data() as Logbook));
         setLogbooks((prev) => mergeListsById(prev, loaded));
       }
     }, (err) => console.warn('bukuPiket onSnapshot error:', err));
@@ -584,7 +580,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubLogbooks = onSnapshot(collection(db, 'logbooks'), (snapshot) => {
       if (!snapshot.empty) {
         const loaded: Logbook[] = [];
-        snapshot.forEach((d) => loaded.push({ id: d.id, ...(d.data() as any) } as Logbook));
+        snapshot.forEach((d) => loaded.push(d.data() as Logbook));
         setLogbooks((prev) => mergeListsById(prev, loaded));
       }
     }, (err) => console.warn('logbooks onSnapshot error:', err));
@@ -592,7 +588,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubCanonicalKejadian = onSnapshot(collection(db, 'kejadian'), (snapshot) => {
       if (!snapshot.empty) {
         const loaded: Incident[] = [];
-        snapshot.forEach((d) => loaded.push({ id: d.id, ...(d.data() as any) } as Incident));
+        snapshot.forEach((d) => loaded.push(d.data() as Incident));
         setIncidents((prev) => mergeListsById(prev, loaded));
       }
     }, (err) => console.warn('kejadian onSnapshot error:', err));
@@ -600,7 +596,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubIncidents = onSnapshot(collection(db, 'incidents'), (snapshot) => {
       if (!snapshot.empty) {
         const loaded: Incident[] = [];
-        snapshot.forEach((d) => loaded.push({ id: d.id, ...(d.data() as any) } as Incident));
+        snapshot.forEach((d) => loaded.push(d.data() as Incident));
         setIncidents((prev) => mergeListsById(prev, loaded));
       }
     }, (err) => console.warn('incidents onSnapshot error:', err));
@@ -608,7 +604,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubHandovers = onSnapshot(collection(db, 'handovers'), (snapshot) => {
       if (!snapshot.empty) {
         const loaded: Handover[] = [];
-        snapshot.forEach((d) => loaded.push({ id: d.id, ...(d.data() as any) } as Handover));
+        snapshot.forEach((d) => loaded.push(d.data() as Handover));
         setHandovers((prev) => mergeListsById(prev, loaded));
       }
     }, (err) => console.warn('handovers onSnapshot error:', err));
@@ -616,29 +612,59 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubReplacements = onSnapshot(collection(db, 'replacements'), (snapshot) => {
       if (!snapshot.empty) {
         const loaded: DutyReplacement[] = [];
-        snapshot.forEach((d) => loaded.push({ id: d.id, ...(d.data() as any) } as DutyReplacement));
+        snapshot.forEach((d) => loaded.push(d.data() as DutyReplacement));
         setReplacements((prev) => mergeListsById(prev, loaded));
       }
     }, (err) => console.warn('replacements onSnapshot error:', err));
 
-    // 3. Auto-load snapshots and ensure today's daily snapshot checkpoint exists
-    const initDailySnapshot = async () => {
+    // 3. Auto-load snapshots and check interval-based auto-backup to Firebase
+    const checkAndRunAutoBackup = async () => {
       try {
         const existing = await getAvailableSnapshots();
         setSnapshots(existing);
-        
-        const todayStr = new Date().toISOString().split('T')[0];
-        const hasTodayAutoSnapshot = existing.some(
-          s => s.type === 'daily_auto' && s.createdAt && s.createdAt.startsWith(todayStr)
-        );
 
-        // If today's auto snapshot doesn't exist yet, create one silently
-        if (!hasTodayAutoSnapshot) {
+        const interval = systemSettings?.autoBackupInterval || 'harian';
+        if (interval === 'mati') {
+          console.log('[Backup] Fitur backup otomatis dimatikan.');
+          return;
+        }
+
+        const now = new Date();
+        const todayStr = now.toISOString().split('T')[0];
+
+        // Find the last auto-backup snapshot
+        const autoBackups = existing.filter(s => s.type === 'daily_auto');
+        let shouldBackup = false;
+
+        if (autoBackups.length === 0) {
+          shouldBackup = true;
+        } else {
+          // Sort to find the latest
+          const latestBackup = autoBackups[0];
+          const lastDate = new Date(latestBackup.createdAt);
+          const diffMs = now.getTime() - lastDate.getTime();
+          const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+          if (interval === 'harian') {
+            shouldBackup = !latestBackup.createdAt.startsWith(todayStr);
+          } else if (interval === 'mingguan') {
+            shouldBackup = diffDays >= 7;
+          } else if (interval === 'bulanan') {
+            shouldBackup = diffDays >= 30;
+          } else if (interval === 'semester') {
+            shouldBackup = diffDays >= 180;
+          }
+        }
+
+        if (shouldBackup) {
+          const displayInterval = interval === 'harian' ? 'Harian' : interval === 'mingguan' ? 'Mingguan' : interval === 'bulanan' ? 'Bulanan' : 'Semester';
+          console.log(`[Backup] Menjalankan backup otomatis ${displayInterval} ke Firebase...`);
+          
           const autoSnap = await createSystemSnapshot({
             type: 'daily_auto',
-            title: `Snapshot Cadangan Harian (${todayStr})`,
-            notes: 'Cadangan otomatis harian terjadwal oleh sistem.',
-            createdBy: 'Sistem Otomatis',
+            title: `Backup Otomatis ${displayInterval} (${todayStr})`,
+            notes: `Cadangan otomatis realtime berkala (${interval}) disimpan aman di Firebase.`,
+            createdBy: 'Sistem Otomatis Realtime',
             state: {
               school,
               systemSettings,
@@ -654,14 +680,44 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               replacements
             }
           });
+          
           setSnapshots(prev => [autoSnap, ...prev.filter(s => s.id !== autoSnap.id)]);
+
+          // Update lastAutoBackupAt in systemSettings
+          const updatedSettings = {
+            ...systemSettings,
+            lastAutoBackupAt: now.toISOString()
+          };
+          setSystemSettings(updatedSettings);
+          saveToStorage('systemSettings', updatedSettings);
+          
+          if (isOnline) {
+            try {
+              await setDoc(doc(db, 'system_settings', 'main'), cleanFirestoreData(updatedSettings), { merge: true });
+            } catch (err) {
+              console.warn('Could not sync updated backup timestamp to Firestore:', err);
+            }
+          }
+          
+          // Use DataContext's recordAudit directly if available or save to audit log
+          const newAudit: AuditLog = {
+            id: `audit-backup-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            userId: 'system',
+            userName: 'Sistem Otomatis',
+            userRole: 'system',
+            action: 'AUTO_BACKUP',
+            module: 'Sistem Backup',
+            details: `Sistem berhasil menjalankan backup otomatis realtime berkala (${interval}) ke Firebase. Title: ${autoSnap.title}`,
+            timestamp: now.toISOString()
+          };
+          setAuditLogs((prev) => [newAudit, ...prev]);
         }
       } catch (err) {
-        console.warn('Auto daily snapshot error:', err);
+        console.warn('Auto backup checker error:', err);
       }
     };
 
-    initDailySnapshot();
+    checkAndRunAutoBackup();
 
     return () => {
       unsubCanonicalUser();
@@ -1118,15 +1174,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (isOnline) {
       try {
         const scheduleUpdate = {
-          ...schedule,
           status: newStatus,
           attendanceId: attId,
           updatedAt: nowIso
         };
         await Promise.all([
-          setDoc(doc(db, 'attendances', newAttendance.id), cleanFirestoreData(newAttendance), { merge: true }),
-          setDoc(doc(db, 'jadwal', schedule.id), cleanFirestoreData(scheduleUpdate), { merge: true }),
-          setDoc(doc(db, 'duty_schedules', schedule.id), cleanFirestoreData(scheduleUpdate), { merge: true })
+          setDoc(doc(db, 'attendances', newAttendance.id), newAttendance, { merge: true }),
+          setDoc(doc(db, 'jadwal', schedule.id), scheduleUpdate, { merge: true }),
+          setDoc(doc(db, 'duty_schedules', schedule.id), scheduleUpdate, { merge: true })
         ]);
         savedDirectToCloud = true;
       } catch (cloudErr) {
@@ -1265,17 +1320,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let savedDirectToCloud = false;
     if (isOnline) {
       try {
-        const fullScheduleUpdate = {
-          ...schedule,
-          status: 'sudah_checkout',
-          updatedAt: nowIso
-        };
         const promises: Promise<any>[] = [
-          setDoc(doc(db, 'jadwal', scheduleId), cleanFirestoreData(fullScheduleUpdate), { merge: true }),
-          setDoc(doc(db, 'duty_schedules', scheduleId), cleanFirestoreData(fullScheduleUpdate), { merge: true })
+          setDoc(doc(db, 'jadwal', scheduleId), {
+            status: 'sudah_checkout',
+            updatedAt: nowIso
+          }, { merge: true }),
+          setDoc(doc(db, 'duty_schedules', scheduleId), {
+            status: 'sudah_checkout',
+            updatedAt: nowIso
+          }, { merge: true })
         ];
         if (updatedAttendance.id) {
-          promises.push(setDoc(doc(db, 'attendances', updatedAttendance.id), cleanFirestoreData(updatedAttendance), { merge: true }));
+          promises.push(setDoc(doc(db, 'attendances', updatedAttendance.id), updatedAttendance, { merge: true }));
         }
         await Promise.all(promises);
         savedDirectToCloud = true;
@@ -1666,7 +1722,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const adminManualCheckIn = async (
     scheduleId: string,
-    status: 'sedang_bertugas' | 'terlambat' | 'sakit' | 'izin' | 'lowbat_tunggu' | 'sudah_checkout' | 'belum_checkin',
+    status: 'sedang_bertugas' | 'terlambat' | 'sakit' | 'izin' | 'lowbat_tunggu',
     notes: string
   ): Promise<{ success: boolean; message: string }> => {
     const schedule = schedules.find((s) => s.id === scheduleId);
@@ -1680,21 +1736,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (status === 'terlambat') {
       targetStatus = 'terlambat';
-    } else if (status === 'sudah_checkout') {
-      targetStatus = 'sudah_checkout';
-      labelNotes = `[SELESAI PIKET] ${notes || 'Ditandai selesai bertugas oleh Admin'}`;
     } else if (status === 'sakit') {
       targetStatus = 'dibatalkan';
-      labelNotes = `[SAKIT] ${notes || 'Izin sakit berhalangan'}`;
+      labelNotes = `[SAKIT] ${notes}`;
     } else if (status === 'izin') {
       targetStatus = 'dibatalkan';
-      labelNotes = `[IZIN] ${notes || 'Izin dinas luar / keperluan lain'}`;
+      labelNotes = `[IZIN] ${notes}`;
     } else if (status === 'lowbat_tunggu') {
       targetStatus = 'belum_checkin';
       labelNotes = `[STATUS TUNGGU - HP LOW-BAT/KENDALA HP] ${notes}`;
-    } else if (status === 'belum_checkin') {
-      targetStatus = 'belum_checkin';
-      labelNotes = notes || 'Status direset ke Belum Hadir';
     }
 
     if (status === 'sedang_bertugas' || status === 'terlambat') {
@@ -1716,116 +1766,40 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         createdAt: nowIso
       };
 
-      const updatedSchedule: DutySchedule = {
-        ...schedule,
-        status: targetStatus,
-        attendanceId: attId,
-        notes: labelNotes,
-        updatedAt: nowIso
-      };
-
-      setAttendances((prev) => {
-        const next = [newAttendance, ...prev.filter((a) => a.scheduleId !== scheduleId)];
-        saveToStorage('attendances', next);
-        return next;
-      });
-
-      setSchedules((prev) => {
-        const next = prev.map((s) => (s.id === scheduleId ? updatedSchedule : s));
-        saveToStorage('schedules', next);
-        return next;
-      });
+      setAttendances((prev) => [newAttendance, ...prev]);
+      setSchedules((prev) =>
+        prev.map((s) =>
+          s.id === scheduleId
+            ? { ...s, status: targetStatus, attendanceId: attId, notes: labelNotes, updatedAt: nowIso }
+            : s
+        )
+      );
 
       if (isOnline) {
         try {
           await Promise.all([
-            setDoc(doc(db, 'attendances', attId), cleanFirestoreData(newAttendance), { merge: true }),
-            setDoc(doc(db, 'jadwal', scheduleId), cleanFirestoreData(updatedSchedule), { merge: true }),
-            setDoc(doc(db, 'duty_schedules', scheduleId), cleanFirestoreData(updatedSchedule), { merge: true })
+            setDoc(doc(db, 'attendances', attId), newAttendance, { merge: true }),
+            setDoc(doc(db, 'jadwal', scheduleId), { status: targetStatus, attendanceId: attId, notes: labelNotes, updatedAt: nowIso }, { merge: true }),
+            setDoc(doc(db, 'duty_schedules', scheduleId), { status: targetStatus, attendanceId: attId, notes: labelNotes, updatedAt: nowIso }, { merge: true })
           ]);
         } catch (e) {
           console.warn('Failed to sync admin manual check-in to Firestore:', e);
         }
       }
-    } else if (status === 'sudah_checkout') {
-      const existingAtt = attendances.find((a) => a.scheduleId === scheduleId);
-      const attId = existingAtt?.id || `att-${Date.now()}`;
-      const updatedAttendance: Attendance = existingAtt
-        ? {
-            ...existingAtt,
-            checkOutAt: nowIso,
-            durasiMenit: existingAtt.checkInAt ? Math.max(1, Math.round((new Date(nowIso).getTime() - new Date(existingAtt.checkInAt).getTime()) / 60000)) : 60,
-            status: 'selesai',
-            checkOutNotes: labelNotes
-          }
-        : {
-            id: attId,
-            scheduleId: schedule.id,
-            userId: schedule.userId,
-            userName: schedule.userName || 'Petugas',
-            postId: schedule.postId,
-            postName: schedule.postName || 'Pos Piket',
-            tanggal: schedule.tanggal,
-            checkInAt: schedule.jamMulai ? `${schedule.tanggal}T${schedule.jamMulai}:00` : nowIso,
-            checkOutAt: nowIso,
-            durasiMenit: 60,
-            isLate: false,
-            status: 'selesai',
-            deviceInfo: 'Admin Manual Override Checkout',
-            checkOutNotes: labelNotes,
-            createdAt: nowIso
-          };
-
-      const updatedSchedule: DutySchedule = {
-        ...schedule,
-        status: 'sudah_checkout',
-        attendanceId: attId,
-        notes: labelNotes,
-        updatedAt: nowIso
-      };
-
-      setAttendances((prev) => {
-        const next = [updatedAttendance, ...prev.filter((a) => a.scheduleId !== scheduleId)];
-        saveToStorage('attendances', next);
-        return next;
-      });
-
-      setSchedules((prev) => {
-        const next = prev.map((s) => (s.id === scheduleId ? updatedSchedule : s));
-        saveToStorage('schedules', next);
-        return next;
-      });
-
-      if (isOnline) {
-        try {
-          await Promise.all([
-            setDoc(doc(db, 'attendances', attId), cleanFirestoreData(updatedAttendance), { merge: true }),
-            setDoc(doc(db, 'jadwal', scheduleId), cleanFirestoreData(updatedSchedule), { merge: true }),
-            setDoc(doc(db, 'duty_schedules', scheduleId), cleanFirestoreData(updatedSchedule), { merge: true })
-          ]);
-        } catch (e) {
-          console.warn('Failed to sync admin checkout to Firestore:', e);
-        }
-      }
     } else {
-      const updatedSchedule: DutySchedule = {
-        ...schedule,
-        status: targetStatus,
-        notes: labelNotes,
-        updatedAt: nowIso
-      };
-
-      setSchedules((prev) => {
-        const next = prev.map((s) => (s.id === scheduleId ? updatedSchedule : s));
-        saveToStorage('schedules', next);
-        return next;
-      });
+      setSchedules((prev) =>
+        prev.map((s) =>
+          s.id === scheduleId
+            ? { ...s, status: targetStatus, notes: labelNotes, updatedAt: nowIso }
+            : s
+        )
+      );
 
       if (isOnline) {
         try {
           await Promise.all([
-            setDoc(doc(db, 'jadwal', scheduleId), cleanFirestoreData(updatedSchedule), { merge: true }),
-            setDoc(doc(db, 'duty_schedules', scheduleId), cleanFirestoreData(updatedSchedule), { merge: true })
+            setDoc(doc(db, 'jadwal', scheduleId), { status: targetStatus, notes: labelNotes, updatedAt: nowIso }, { merge: true }),
+            setDoc(doc(db, 'duty_schedules', scheduleId), { status: targetStatus, notes: labelNotes, updatedAt: nowIso }, { merge: true })
           ]);
         } catch (e) {
           console.warn('Failed to sync schedule status update to Firestore:', e);
@@ -1873,11 +1847,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       id: `sch-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
       createdAt: new Date().toISOString()
     };
-    setSchedules((prev) => {
-      const next = [newSch, ...prev];
-      saveToStorage('schedules', next);
-      return next;
-    });
+    setSchedules((prev) => [newSch, ...prev]);
 
     // Send instant real-time notification to the assigned teacher
     const isDadakan = Boolean(newSch.isDadakan);
@@ -1919,13 +1889,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateSchedule = async (id: string, data: Partial<DutySchedule>) => {
     const old = schedules.find((s) => s.id === id);
-    const updated = old ? { ...old, ...data, id, updatedAt: new Date().toISOString() } : { id, ...data, updatedAt: new Date().toISOString() };
+    const updated = old ? { ...old, ...data, updatedAt: new Date().toISOString() } : { id, ...data, updatedAt: new Date().toISOString() };
     
-    setSchedules((prev) => {
-      const next = prev.map((s) => (s.id === id ? (updated as DutySchedule) : s));
-      saveToStorage('schedules', next);
-      return next;
-    });
+    setSchedules((prev) =>
+      prev.map((s) => (s.id === id ? (updated as DutySchedule) : s))
+    );
 
     if (isOnline) {
       try {
@@ -1944,17 +1912,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const deleteSchedule = async (id: string) => {
     const old = schedules.find((s) => s.id === id);
-    setSchedules((prev) => {
-      const next = prev.filter((s) => s.id !== id);
-      saveToStorage('schedules', next);
-      return next;
-    });
-
-    setAttendances((prev) => {
-      const next = prev.filter((a) => a.scheduleId !== id);
-      saveToStorage('attendances', next);
-      return next;
-    });
+    setSchedules((prev) => prev.filter((s) => s.id !== id));
 
     if (isOnline) {
       try {

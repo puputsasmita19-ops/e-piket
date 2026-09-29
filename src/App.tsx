@@ -385,35 +385,39 @@ const MainLayout: React.FC = () => {
 
   return (
     <PullToRefresh onRefresh={handlePullRefresh}>
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col antialiased transition-colors duration-200">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col antialiased transition-colors duration-200 print:bg-white print:text-black">
         {/* Top Navbar */}
-        <Navbar 
-          onOpenAISummary={() => setShowAISummary(true)} 
-          activeTab={activeTab} 
-          setActiveTab={setActiveTab} 
-          isSidebarHidden={isSidebarHidden}
-          onToggleSidebar={toggleSidebarHidden}
-        />
+        <div className="print:hidden">
+          <Navbar 
+            onOpenAISummary={() => setShowAISummary(true)} 
+            activeTab={activeTab} 
+            setActiveTab={setActiveTab} 
+            isSidebarHidden={isSidebarHidden}
+            onToggleSidebar={toggleSidebarHidden}
+          />
+        </div>
 
-        <div className="flex-1 flex min-h-[calc(100vh-3.5rem)] sm:min-h-[calc(100vh-4rem)]">
+        <div className="flex-1 flex min-h-[calc(100vh-3.5rem)] sm:min-h-[calc(100vh-4rem)] print:min-h-0 print:block">
           {/* Desktop Sidebar Spacer to preserve grid flow with fixed sidebar */}
           <div 
-            className={`hidden lg:block shrink-0 transition-all duration-300 ease-in-out ${
+            className={`hidden lg:block shrink-0 transition-all duration-300 ease-in-out print:hidden ${
               isSidebarHidden ? 'w-0' : 'w-64'
             }`} 
             aria-hidden="true" 
           />
 
           {/* Desktop Sidebar (Fixed position - 100% frozen, never scrolls with the page) */}
-          <Sidebar 
-            activeTab={activeTab} 
-            setActiveTab={setActiveTab} 
-            isHidden={isSidebarHidden}
-            onToggleHide={toggleSidebarHidden}
-          />
+          <div className="print:hidden">
+            <Sidebar 
+              activeTab={activeTab} 
+              setActiveTab={setActiveTab} 
+              isHidden={isSidebarHidden}
+              onToggleHide={toggleSidebarHidden}
+            />
+          </div>
 
           {/* Main Content Area with Adaptive Ergonomic Width */}
-          <main className={`flex-1 min-w-0 px-3 sm:px-6 lg:px-8 py-4 sm:py-6 pb-20 lg:pb-10 transition-all duration-300 w-full ${
+          <main className={`flex-1 min-w-0 px-3 sm:px-6 lg:px-8 py-4 sm:py-6 pb-20 lg:pb-10 transition-all duration-300 w-full print:p-0 print:m-0 print:max-w-full ${
             isSidebarHidden ? 'max-w-[1550px] mx-auto' : 'max-w-7xl mx-auto'
           }`}>
             <Suspense fallback={<ModuleLoadingFallback />}>
@@ -427,7 +431,7 @@ const MainLayout: React.FC = () => {
           <button
             onClick={toggleSidebarHidden}
             title="Tampilkan Panel Menu (Ctrl+B)"
-            className="hidden lg:flex fixed left-4 bottom-5 z-40 items-center gap-2 px-3 py-2 rounded-xl bg-slate-900/95 hover:bg-slate-800 text-emerald-400 border border-slate-700/80 shadow-2xl backdrop-blur-md text-xs font-bold transition-all active:scale-95 cursor-pointer hover:border-emerald-500/50 group animate-in fade-in slide-in-from-left-4 duration-200"
+            className="hidden lg:flex fixed left-4 bottom-5 z-40 items-center gap-2 px-3 py-2 rounded-xl bg-slate-900/95 hover:bg-slate-800 text-emerald-400 border border-slate-700/80 shadow-2xl backdrop-blur-md text-xs font-bold transition-all active:scale-95 cursor-pointer hover:border-emerald-500/50 group animate-in fade-in slide-in-from-left-4 duration-200 print:hidden"
           >
             <PanelLeftOpen className="w-4 h-4 group-hover:scale-110 transition-transform text-emerald-400 shrink-0" />
             <span>Panel Menu</span>
@@ -435,13 +439,19 @@ const MainLayout: React.FC = () => {
         )}
 
         {/* Mobile Bottom Navigation */}
-        <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
+        <div className="print:hidden">
+          <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
+        </div>
 
         {/* Floating Scroll to Top Button */}
-        <ScrollToTopButton />
+        <div className="print:hidden">
+          <ScrollToTopButton />
+        </div>
 
         {/* Offline Connectivity & Sync Indicator */}
-        <OfflineIndicator />
+        <div className="print:hidden">
+          <OfflineIndicator />
+        </div>
 
         {/* AI Executive Summary Modal */}
         {showAISummary && (

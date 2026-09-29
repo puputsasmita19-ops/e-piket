@@ -39,7 +39,8 @@ export const PengaturanSistem: React.FC = () => {
     users,
     schedules,
     incidents,
-    logbooks
+    logbooks,
+    createEmergencySnapshot
   } = useData();
 
   const { 
@@ -1194,6 +1195,95 @@ export const PengaturanSistem: React.FC = () => {
                   <span>{syncResult}</span>
                 </div>
               )}
+
+              {/* Fitur Real-Time Auto-Backup ke Firebase (Requirement 8) */}
+              <div className="p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
+                <div className="flex items-start sm:items-center gap-3.5 pb-3 border-b border-slate-100 dark:border-slate-800">
+                  <div className="p-2.5 rounded-xl bg-teal-500/10 text-teal-600 dark:bg-teal-950/60 dark:text-teal-400 shrink-0">
+                    <Database className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
+                      <span>⚙️ Backup Otomatis Realtime ke Firebase</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-600 text-white font-mono font-bold shrink-0">
+                        AUTOMATIC CLOUD BACKUP
+                      </span>
+                    </h4>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      Sistem akan melakukan sinkronisasi pencadangan data e-Piket secara realtime dan otomatis ke Firebase Firestore sesuai frekuensi interval yang Anda tetapkan.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                  <div>
+                    <label className="block font-bold uppercase text-slate-700 dark:text-slate-300 mb-1.5">
+                      Frekuensi Pencadangan Otomatis <span className="text-rose-500">*</span>
+                    </label>
+                    <select
+                      value={formData.autoBackupInterval || 'harian'}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          autoBackupInterval: e.target.value as any
+                        })
+                      }
+                      className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-bold focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                    >
+                      <option value="harian">🔄 Harian (Setiap Hari Sekali)</option>
+                      <option value="mingguan">📅 Mingguan (Setiap 7 Hari Sekali)</option>
+                      <option value="bulanan">📆 Bulanan (Setiap 30 Hari Sekali)</option>
+                      <option value="semester">🏫 Semester (Setiap 6 Bulan Sekali)</option>
+                      <option value="mati">❌ Mati (Hanya Manual)</option>
+                    </select>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 block">
+                      Snapshot backup terenkripsi secara otomatis menggunakan rules_version = '2' di Firestore.
+                    </span>
+                  </div>
+
+                  <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl flex flex-col justify-between gap-2.5 text-xs">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-0.5">Status Pencadangan Terakhir</span>
+                      <p className="font-sans text-slate-800 dark:text-slate-200 font-bold text-[11px]">
+                        {systemSettings.lastAutoBackupAt
+                          ? `Terakhir disinkronisasi: ${new Date(systemSettings.lastAutoBackupAt).toLocaleString('id-ID')} WIB`
+                          : 'Belum ada catatan cadangan otomatis harian/mingguan.'}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          showSuccessToast('Memulai sinkronisasi backup realtime instan ke Firebase...', 'Backup Berjalan');
+                          const nowStr = new Date().toISOString().split('T')[0];
+                          const snap = await createEmergencySnapshot(
+                            `Backup Instan Realtime (${nowStr})`,
+                            `Backup manual instan yang dipicu oleh administrator.`
+                          );
+                          if (snap) {
+                            showSuccessToast(`Backup berhasil disimpan! ID: ${snap.id}`, 'Pencadangan Selesai');
+                            const now = new Date().toISOString();
+                            await updateSystemSettings({
+                              lastAutoBackupAt: now
+                            });
+                            setFormData(prev => ({
+                              ...prev,
+                              lastAutoBackupAt: now
+                            }));
+                          }
+                        } catch (e: any) {
+                          showErrorToast(e.message || 'Gagal menjalankan backup.');
+                        }
+                      }}
+                      className="w-full sm:w-auto px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-md transition active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Database className="w-4 h-4" />
+                      <span>Cadangkan Instan Sekarang</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
 
 

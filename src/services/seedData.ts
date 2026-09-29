@@ -197,5 +197,7 @@ export const INITIAL_SYSTEM_SETTINGS: SystemSettings = {
   schoolLatitude: -6.229746,
   schoolLongitude: 106.807493,
   requirePhotoOnLogbook: true,
-  autoPushNotificationIntervalMinutes: 15
+  autoPushNotificationIntervalMinutes: 15,
+  autoBackupInterval: 'harian',
+  lastAutoBackupAt: ''
 };

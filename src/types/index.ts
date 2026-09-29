@@ -368,6 +368,8 @@ export interface SystemSettings {
   gpsAccuracyMeters?: number;
   requirePhotoOnLogbook: boolean;
   autoPushNotificationIntervalMinutes?: number; // 5, 10, 15, or 0 (Off)
+  autoBackupInterval?: 'harian' | 'mingguan' | 'bulanan' | 'semester' | 'mati';
+  lastAutoBackupAt?: string;
 }
 
 export interface ImportErrorItem {

@@ -284,7 +284,7 @@ export const Laporan: React.FC = () => {
     <div className="space-y-6">
       
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 print:hidden">
         <div>
           <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
             Laporan & Rekapitulasi Piket
@@ -368,7 +368,7 @@ export const Laporan: React.FC = () => {
       )}
 
       {/* QUICK DOWNLOAD SECTION: ARSIP FISIK SEKOLAH */}
-      <div className="bg-gradient-to-r from-emerald-950 via-teal-950 to-slate-900 rounded-3xl p-6 text-white shadow-lg space-y-4 border border-emerald-900/60">
+      <div className="bg-gradient-to-r from-emerald-950 via-teal-950 to-slate-900 rounded-3xl p-6 text-white shadow-lg space-y-4 border border-emerald-900/60 print:hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
@@ -488,7 +488,7 @@ export const Laporan: React.FC = () => {
       </div>
 
       {/* Report Controls & Filter Card */}
-      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs p-5 sm:p-6 space-y-4">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs p-5 sm:p-6 space-y-4 print:hidden">
         
         {/* Period Selector Tabs */}
         <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
@@ -585,7 +585,7 @@ export const Laporan: React.FC = () => {
       </div>
 
       {/* Summary KPI Cards for this Report Range */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 print:hidden">
         
         <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
           <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Jadwal Tugas</span>
@@ -614,7 +614,7 @@ export const Laporan: React.FC = () => {
       </div>
 
       {/* REPORT PREVIEW (KOP SURAT PREVIEW) */}
-      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-md p-6 sm:p-10 space-y-6">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-md p-6 sm:p-10 space-y-6 print:block print:w-full print:shadow-none print:border-none print:p-0 print:m-0 print:text-black print:bg-white">
         
         {/* Kop Surat Header */}
         <div className="text-center border-b-2 border-slate-900 dark:border-slate-700 pb-4">
@@ -641,9 +641,9 @@ export const Laporan: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 print:hidden">
             <button
-              onClick={handlePrintPDF}
+              onClick={() => { haptic.medium(); window.print(); }}
               className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer transition active:scale-95"
             >
               <Printer className="w-3.5 h-3.5" />

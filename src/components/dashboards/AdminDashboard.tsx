@@ -705,53 +705,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, on
         )}
       </div>
 
-      {/* HISTORY / RIWAYAT PIKET SELESAI HARI INI SECTION */}
-      {historySchedules.length > 0 && (
-        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 sm:p-6 transition-colors space-y-3">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-            <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
-              <History className="w-5 h-5 text-teal-600 dark:text-teal-400" />
-              <span>📜 Histori &amp; Riwayat Piket Selesai Hari Ini ({historySchedules.length})</span>
-            </h3>
-            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300">
-              Arsip Selesai
-            </span>
-          </div>
-
-          <div className="space-y-2">
-            {historySchedules.map((sch) => (
-              <div key={sch.id} className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700 flex items-center justify-between gap-3 text-xs">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-extrabold text-slate-900 dark:text-white">{sch.userName}</span>
-                    <span className="text-[9.5px] font-bold px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
-                      {sch.postName}
-                    </span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300">
-                      {sch.status === 'sudah_checkout' ? 'Selesai Checkout' : 'Dibatalkan / Sakit / Izin'}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                    Shift: {sch.shiftName} ({sch.jamMulai} - {sch.jamSelesai} WIB) {sch.notes ? `• Catatan: ${sch.notes}` : ''}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteScheduleItem(sch)}
-                    className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400 transition"
-                    title="Hapus riwayat"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* EDIT SCHEDULE MODAL */}
       {editingSchedule && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
