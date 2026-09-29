@@ -202,7 +202,9 @@ export const LoginPage: React.FC = () => {
       if (prev.length >= 6) return prev;
       const nextPin = prev + digit;
       if (nextPin.length === 6) {
-        handleVerifyPin(nextPin);
+        setTimeout(() => {
+          handleVerifyPin(nextPin);
+        }, 0);
       }
       return nextPin;
     });

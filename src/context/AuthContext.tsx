@@ -430,108 +430,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Google Drive Connection & OAuth Access Token Flow
   const refreshDriveAccessTokenSilently = async (): Promise<string | null> => {
-    try {
-      const gsiTokenData = await requestGsiOAuthToken(OAUTH_CLIENT_ID, '');
-      if (gsiTokenData.accessToken) {
-        setDriveTokenCache(gsiTokenData.accessToken, gsiTokenData.expiresIn || 3600);
-        console.log('[Google Drive Auth] Access token refreshed silently via GIS.');
-        return gsiTokenData.accessToken;
-      }
-    } catch (err) {
-      console.warn('[Google Drive Auth] Silent token refresh attempt failed:', err);
-    }
     return cachedDriveAccessToken;
   };
 
   const connectGoogleDrive = async (): Promise<{ success: boolean; message: string }> => {
-    try {
-      isSigningIn = true;
-      let acquiredToken: string | null = null;
-      let driveEmail: string | null = null;
-      let expiresIn = 3600;
-      let lastErrorMessage = '';
-
-      // Layer 1: Attempt Firebase Auth popup
-      try {
-        const provider = new GoogleAuthProvider();
-        provider.addScope('https://www.googleapis.com/auth/drive.file');
-        provider.addScope('https://www.googleapis.com/auth/drive.readonly');
-        provider.addScope('https://www.googleapis.com/auth/drive');
-        provider.setCustomParameters({ prompt: 'select_account consent' });
-
-        const result = await signInWithPopup(auth, provider);
-        const credential = GoogleAuthProvider.credentialFromResult(result);
-
-        if (result.user) {
-          driveEmail = result.user.email;
-          setGoogleDriveUser(result.user);
-          if (credential?.accessToken) {
-            acquiredToken = credential.accessToken;
-          } else {
-            try {
-              acquiredToken = await result.user.getIdToken();
-            } catch {
-              acquiredToken = `fb_drive_token_${Date.now()}`;
-            }
-          }
-        }
-      } catch (fbErr: any) {
-        lastErrorMessage = fbErr.message || String(fbErr);
-        console.warn('Firebase popup OAuth error, falling back to GIS client:', fbErr);
-      }
-
-      // Layer 2: GIS (Google Identity Services) fallback if token not acquired yet
-      if (!acquiredToken && typeof window !== 'undefined') {
-        try {
-          const gsiTokenData = await requestGsiOAuthToken(OAUTH_CLIENT_ID, 'consent');
-          if (gsiTokenData.accessToken) {
-            acquiredToken = gsiTokenData.accessToken;
-            expiresIn = gsiTokenData.expiresIn || 3600;
-            if (gsiTokenData.userInfo?.email) {
-              driveEmail = gsiTokenData.userInfo.email;
-              setGoogleDriveUser({
-                email: gsiTokenData.userInfo.email,
-                displayName: gsiTokenData.userInfo.name || 'Google Drive User',
-                photoURL: gsiTokenData.userInfo.picture || null,
-                uid: `gdrive_user_${Date.now()}`
-              } as any);
-            }
-          }
-        } catch (gsiErr: any) {
-          lastErrorMessage = gsiErr.message || String(gsiErr);
-          console.warn('GIS Token client error:', gsiErr);
-        }
-      }
-
-      if (acquiredToken) {
-        setDriveTokenCache(acquiredToken, expiresIn);
-
-        if (driveEmail) {
-          const matched = usersList.find((u) => u.email.toLowerCase() === driveEmail?.toLowerCase());
-          if (matched) {
-            setCurrentUser(matched);
-          }
-        }
-
-        return {
-          success: true,
-          message: `Berhasil terhubung ke Google Drive (${driveEmail || 'OAuth Aktif'})`
-        };
-      }
-
-      return {
-        success: false,
-        message: lastErrorMessage || 'Gagal memperoleh izin OAuth Google Drive. Silakan periksa popup browser dan domain yang terotorisasi.'
-      };
-    } catch (err: any) {
-      console.warn('Google Drive Sign-in error:', err);
-      return {
-        success: false,
-        message: err.message || 'Gagal menyambungkan Google Drive.'
-      };
-    } finally {
-      isSigningIn = false;
-    }
+    return {
+      success: false,
+      message: 'Fitur Google Drive OAuth telah dinonaktifkan sesuai permintaan.'
+    };
   };
 
   const disconnectGoogleDrive = async () => {
