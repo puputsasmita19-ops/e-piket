@@ -69,14 +69,20 @@ export const BatchMultiScheduleModal: React.FC<BatchMultiScheduleModalProps> = (
   const calculatedDates = getCalculatedTargetDates();
 
   // Filter users based on search and role
-  const filteredTeachers = users.filter((u) => {
-    if (!u.statusAktif) return false;
+  const filteredTeachers = (users || []).filter((u) => {
+    if (!u || !u.statusAktif) return false;
     const matchesRole = batchRoleFilter === 'all' || u.role === batchRoleFilter;
+    const searchLow = (batchTeacherSearch || '').toLowerCase();
+    const nama = (u.nama || '').toLowerCase();
+    const role = (u.role || '').toLowerCase();
+    const nip = String(u.nip || '');
+    const jabatan = (u.jabatan || '').toLowerCase();
+
     const matchesSearch =
-      u.nama.toLowerCase().includes(batchTeacherSearch.toLowerCase()) ||
-      u.role.toLowerCase().includes(batchTeacherSearch.toLowerCase()) ||
-      (u.nip && u.nip.includes(batchTeacherSearch)) ||
-      (u.jabatan && u.jabatan.toLowerCase().includes(batchTeacherSearch.toLowerCase()));
+      nama.includes(searchLow) ||
+      role.includes(searchLow) ||
+      nip.includes(batchTeacherSearch || '') ||
+      jabatan.includes(searchLow);
 
     return matchesRole && matchesSearch;
   });

@@ -1189,11 +1189,15 @@ export const ImportMasterDataModal: React.FC<ImportMasterDataModalProps> = ({
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-800 dark:text-slate-200">
                       {parsedUsers
-                        .filter((u) => 
-                          u.nama.toLowerCase().includes(previewFilter.toLowerCase()) ||
-                          u.username.toLowerCase().includes(previewFilter.toLowerCase()) ||
-                          u.nip.includes(previewFilter)
-                        )
+                        .filter((u) => {
+                          if (!u) return false;
+                          const f = (previewFilter || '').toLowerCase();
+                          return (
+                            (u.nama || '').toLowerCase().includes(f) ||
+                            (u.username || '').toLowerCase().includes(f) ||
+                            String(u.nip || '').includes(previewFilter || '')
+                          );
+                        })
                         .map((u) => (
                           <tr key={u.index} className={u.validationError ? 'bg-rose-50/50 dark:bg-rose-950/20' : u.isDuplicate ? 'bg-amber-50/40 dark:bg-amber-950/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'}>
                             <td className="py-2 px-3 font-mono text-slate-500">{u.index}</td>
@@ -1256,7 +1260,11 @@ export const ImportMasterDataModal: React.FC<ImportMasterDataModalProps> = ({
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-800 dark:text-slate-200">
                       {parsedPosts
-                        .filter((p) => p.namaPos.toLowerCase().includes(previewFilter.toLowerCase()) || p.lokasi.toLowerCase().includes(previewFilter.toLowerCase()))
+                        .filter((p) => {
+                          if (!p) return false;
+                          const f = (previewFilter || '').toLowerCase();
+                          return (p.namaPos || '').toLowerCase().includes(f) || (p.lokasi || '').toLowerCase().includes(f);
+                        })
                         .map((p) => (
                           <tr key={p.index} className={p.validationError ? 'bg-rose-50/50 dark:bg-rose-950/20' : p.isDuplicate ? 'bg-amber-50/40 dark:bg-amber-950/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'}>
                             <td className="py-2 px-3 font-mono text-slate-500">{p.index}</td>
@@ -1298,7 +1306,11 @@ export const ImportMasterDataModal: React.FC<ImportMasterDataModalProps> = ({
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-800 dark:text-slate-200">
                       {parsedShifts
-                        .filter((s) => s.namaShift.toLowerCase().includes(previewFilter.toLowerCase()))
+                        .filter((s) => {
+                          if (!s) return false;
+                          const f = (previewFilter || '').toLowerCase();
+                          return (s.namaShift || '').toLowerCase().includes(f);
+                        })
                         .map((s) => (
                           <tr key={s.index} className={s.validationError ? 'bg-rose-50/50 dark:bg-rose-950/20' : s.isDuplicate ? 'bg-amber-50/40 dark:bg-amber-950/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'}>
                             <td className="py-2 px-3 font-mono text-slate-500">{s.index}</td>

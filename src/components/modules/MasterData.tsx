@@ -45,7 +45,7 @@ import { SchoolGpsConfigPanel } from '../admin/SchoolGpsConfigPanel';
 import { compressImageAuto, CompressionResult } from '../../utils/imageCompressor';
 import { showSuccessToast, showErrorToast } from '../../utils/toast';
 
-export const MasterData: React.FC = () => {
+const MasterDataContent: React.FC = () => {
   const { 
     school, 
     updateSchool, 
@@ -69,8 +69,57 @@ export const MasterData: React.FC = () => {
     firestoreStatusMessage,
     syncAllDataToFirestore,
     syncInitialMasterDataToFirestore,
-    purgeAllDemoAndShadowData
+    purgeAllDemoAndShadowData,
+    recordAudit
   } = useData();
+
+  // In-Depth Error Logger to Audit Log
+  const logMasterDataError = React.useCallback((errorAction: string, err: any, metadata?: Record<string, any>) => {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    const errorStack = err instanceof Error ? err.stack : undefined;
+    
+    console.error(`[MasterData Error] [${errorAction}]:`, err);
+    
+    if (recordAudit) {
+      try {
+        recordAudit(
+          'ERROR_MASTER_DATA',
+          'Master Data',
+          `Kendala pada '${errorAction}': ${errorMsg}. ${metadata ? `Detail: ${JSON.stringify(metadata)}` : ''}`,
+          undefined,
+          undefined,
+          {
+            action: errorAction,
+            errorMessage: errorMsg,
+            errorStack: errorStack ? errorStack.slice(0, 500) : undefined,
+            timestamp: new Date().toISOString(),
+            metadata
+          }
+        );
+      } catch (auditErr) {
+        console.warn('Gagal mencatat log audit:', auditErr);
+      }
+    }
+  }, [recordAudit]);
+
+  // Safe Loading State & Data Readiness Checking
+  const [isDataLoaded, setIsDataLoaded] = useState<boolean>(false);
+  const [initLoadError, setInitLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      if (Array.isArray(users) && Array.isArray(posts) && Array.isArray(shifts) && school !== undefined) {
+        const timer = setTimeout(() => {
+          setIsDataLoaded(true);
+          setInitLoadError(null);
+        }, 30);
+        return () => clearTimeout(timer);
+      }
+    } catch (e: any) {
+      setInitLoadError(e.message || 'Gagal memverifikasi integritas data master.');
+      logMasterDataError('VALIDASI_INTEGRITAS_DATA', e);
+    }
+  }, [users, posts, shifts, school, logMasterDataError]);
 
   const [isSyncingFirebase, setIsSyncingFirebase] = useState(false);
   const [isPurgingDemo, setIsPurgingDemo] = useState(false);
@@ -87,6 +136,7 @@ export const MasterData: React.FC = () => {
         showErrorToast(res.message);
       }
     } catch (e: any) {
+      logMasterDataError('PURGE_DEMO_FIREBASE', e);
       showErrorToast(e.message || 'Gagal membersihkan data demo.');
     } finally {
       setIsPurgingDemo(false);
@@ -102,6 +152,9 @@ export const MasterData: React.FC = () => {
       if (res.success) {
         showSuccessToast(res.message);
       }
+    } catch (e: any) {
+      logMasterDataError('SYNC_FIREBASE', e, { initialOnly });
+      showErrorToast(e.message || 'Gagal sinkronisasi ke Firebase.');
     } finally {
       setIsSyncingFirebase(false);
     }
@@ -244,30 +297,44 @@ export const MasterData: React.FC = () => {
   // SORTED & FILTERED DATA LISTS
   // -------------------------------------------------------------
   const filteredAndSortedUsers = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
-    let list = users.filter((u) => 
-      u.nama.toLowerCase().includes(q) || 
-      (u.username && u.username.toLowerCase().includes(q)) ||
-      (u.nomorHP && u.nomorHP.includes(q)) ||
-      (u.nip && u.nip.includes(q)) ||
-      (u.jabatan && u.jabatan.toLowerCase().includes(q)) ||
-      (u.role && u.role.toLowerCase().includes(q))
-    );
+    const q = (searchQuery || '').toLowerCase().trim();
+    let list = (users || []).filter((u) => {
+      if (!u) return false;
+      const nama = (u.nama || '').toLowerCase();
+      const username = (u.username || '').toLowerCase();
+      const nomorHP = String(u.nomorHP || '');
+      const nip = String(u.nip || '');
+      const nuptk = String(u.nuptk || '');
+      const jabatan = (u.jabatan || '').toLowerCase();
+      const unitKerja = (u.unitKerja || '').toLowerCase();
+      const role = (u.role || '').toLowerCase();
+
+      return (
+        nama.includes(q) || 
+        username.includes(q) ||
+        nomorHP.includes(q) ||
+        nip.includes(q) ||
+        nuptk.includes(q) ||
+        jabatan.includes(q) ||
+        unitKerja.includes(q) ||
+        role.includes(q)
+      );
+    });
 
     list.sort((a, b) => {
       let comparison = 0;
       if (userSortField === 'nama') {
-        comparison = a.nama.localeCompare(b.nama, 'id', { sensitivity: 'base' });
+        comparison = (a?.nama || '').localeCompare(b?.nama || '', 'id', { sensitivity: 'base' });
       } else if (userSortField === 'username') {
-        comparison = (a.username || '').localeCompare(b.username || '', 'id');
+        comparison = (a?.username || '').localeCompare(b?.username || '', 'id');
       } else if (userSortField === 'role') {
-        comparison = a.role.localeCompare(b.role);
+        comparison = (a?.role || '').localeCompare(b?.role || '');
       } else if (userSortField === 'nip') {
-        comparison = (a.nip || '').localeCompare(b.nip || '');
+        comparison = (a?.nip || '').localeCompare(b?.nip || '');
       } else if (userSortField === 'jabatan') {
-        comparison = (a.jabatan || '').localeCompare(b.jabatan || '', 'id');
+        comparison = (a?.jabatan || '').localeCompare(b?.jabatan || '', 'id');
       } else if (userSortField === 'statusAktif') {
-        comparison = (a.statusAktif === b.statusAktif ? 0 : a.statusAktif ? -1 : 1);
+        comparison = (a?.statusAktif === b?.statusAktif ? 0 : a?.statusAktif ? -1 : 1);
       }
       return userSortOrder === 'asc' ? comparison : -comparison;
     });
@@ -276,23 +343,26 @@ export const MasterData: React.FC = () => {
   }, [users, searchQuery, userSortField, userSortOrder]);
 
   const filteredAndSortedPosts = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
-    let list = posts.filter((p) =>
-      p.namaPos.toLowerCase().includes(q) ||
-      p.lokasi.toLowerCase().includes(q) ||
-      (p.deskripsi && p.deskripsi.toLowerCase().includes(q))
-    );
+    const q = (searchQuery || '').toLowerCase().trim();
+    let list = (posts || []).filter((p) => {
+      if (!p) return false;
+      const namaPos = (p.namaPos || '').toLowerCase();
+      const lokasi = (p.lokasi || '').toLowerCase();
+      const deskripsi = (p.deskripsi || '').toLowerCase();
+
+      return namaPos.includes(q) || lokasi.includes(q) || deskripsi.includes(q);
+    });
 
     list.sort((a, b) => {
       let comparison = 0;
       if (postSortField === 'namaPos') {
-        comparison = a.namaPos.localeCompare(b.namaPos, 'id');
+        comparison = (a?.namaPos || '').localeCompare(b?.namaPos || '', 'id');
       } else if (postSortField === 'lokasi') {
-        comparison = a.lokasi.localeCompare(b.lokasi, 'id');
+        comparison = (a?.lokasi || '').localeCompare(b?.lokasi || '', 'id');
       } else if (postSortField === 'petugasRequiredCount') {
-        comparison = a.petugasRequiredCount - b.petugasRequiredCount;
+        comparison = (a?.petugasRequiredCount || 0) - (b?.petugasRequiredCount || 0);
       } else if (postSortField === 'statusAktif') {
-        comparison = (a.statusAktif === b.statusAktif ? 0 : a.statusAktif ? -1 : 1);
+        comparison = (a?.statusAktif === b?.statusAktif ? 0 : a?.statusAktif ? -1 : 1);
       }
       return postSortOrder === 'asc' ? comparison : -comparison;
     });
@@ -301,22 +371,30 @@ export const MasterData: React.FC = () => {
   }, [posts, searchQuery, postSortField, postSortOrder]);
 
   const filteredAndSortedShifts = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
-    let list = shifts.filter((s) =>
-      s.namaShift.toLowerCase().includes(q) ||
-      (s.keterangan && s.keterangan.toLowerCase().includes(q)) ||
-      s.jamMulai.includes(q) ||
-      s.jamSelesai.includes(q)
-    );
+    const q = (searchQuery || '').toLowerCase().trim();
+    let list = (shifts || []).filter((s) => {
+      if (!s) return false;
+      const namaShift = (s.namaShift || '').toLowerCase();
+      const keterangan = (s.keterangan || '').toLowerCase();
+      const jamMulai = String(s.jamMulai || '');
+      const jamSelesai = String(s.jamSelesai || '');
+
+      return (
+        namaShift.includes(q) ||
+        keterangan.includes(q) ||
+        jamMulai.includes(q) ||
+        jamSelesai.includes(q)
+      );
+    });
 
     list.sort((a, b) => {
       let comparison = 0;
       if (shiftSortField === 'jamMulai') {
-        comparison = a.jamMulai.localeCompare(b.jamMulai);
+        comparison = (a?.jamMulai || '').localeCompare(b?.jamMulai || '');
       } else if (shiftSortField === 'namaShift') {
-        comparison = a.namaShift.localeCompare(b.namaShift, 'id');
+        comparison = (a?.namaShift || '').localeCompare(b?.namaShift || '', 'id');
       } else if (shiftSortField === 'jamSelesai') {
-        comparison = a.jamSelesai.localeCompare(b.jamSelesai);
+        comparison = (a?.jamSelesai || '').localeCompare(b?.jamSelesai || '');
       }
       return shiftSortOrder === 'asc' ? comparison : -comparison;
     });
@@ -404,7 +482,7 @@ export const MasterData: React.FC = () => {
   // -------------------------------------------------------------
   const handleBatchDeleteUsers = () => {
     if (selectedUserIds.length === 0) return;
-    const selectedUsers = users.filter(u => selectedUserIds.includes(u.id));
+    const selectedUsers = (users || []).filter(u => u && selectedUserIds.includes(u.id));
     const previewNames = selectedUsers.slice(0, 5).map(u => u.nama).join(', ');
     const moreText = selectedUsers.length > 5 ? ` (+${selectedUsers.length - 5} pengguna lainnya)` : '';
 
@@ -415,16 +493,21 @@ export const MasterData: React.FC = () => {
       itemDetails: `Pengguna: ${previewNames}${moreText}. Seluruh data akun akan dihapus permanen dari sistem dan cloud database.`,
       requireTypingConfirmation: selectedUserIds.length >= 5,
       onConfirm: async () => {
-        const res = await deleteMultipleUsers(selectedUserIds);
-        setSelectedUserIds([]);
-        showSuccessToast(`Berhasil menghapus ${res.count} pengguna sekaligus.`);
+        try {
+          const res = await deleteMultipleUsers(selectedUserIds);
+          setSelectedUserIds([]);
+          showSuccessToast(`Berhasil menghapus ${res.count} pengguna sekaligus.`);
+        } catch (err: any) {
+          logMasterDataError('HAPUS_MASSAL_PENGGUNA', err, { count: selectedUserIds.length });
+          showErrorToast(err.message || 'Gagal menghapus pengguna.');
+        }
       }
     });
   };
 
   const handleBatchDeletePosts = () => {
     if (selectedPostIds.length === 0) return;
-    const selectedPosts = posts.filter(p => selectedPostIds.includes(p.id));
+    const selectedPosts = (posts || []).filter(p => p && selectedPostIds.includes(p.id));
     const previewNames = selectedPosts.map(p => p.namaPos).join(', ');
 
     setDeleteModalState({
@@ -434,16 +517,21 @@ export const MasterData: React.FC = () => {
       itemDetails: `Pos: ${previewNames}. Data pos ini akan dihapus permanen dari sistem dan cloud database.`,
       requireTypingConfirmation: selectedPostIds.length >= 4,
       onConfirm: async () => {
-        const res = await deleteMultiplePosts(selectedPostIds);
-        setSelectedPostIds([]);
-        showSuccessToast(`Berhasil menghapus ${res.count} pos piket.`);
+        try {
+          const res = await deleteMultiplePosts(selectedPostIds);
+          setSelectedPostIds([]);
+          showSuccessToast(`Berhasil menghapus ${res.count} pos piket.`);
+        } catch (err: any) {
+          logMasterDataError('HAPUS_MASSAL_POS', err, { count: selectedPostIds.length });
+          showErrorToast(err.message || 'Gagal menghapus pos piket.');
+        }
       }
     });
   };
 
   const handleBatchDeleteShifts = () => {
     if (selectedShiftIds.length === 0) return;
-    const selectedShifts = shifts.filter(s => selectedShiftIds.includes(s.id));
+    const selectedShifts = (shifts || []).filter(s => s && selectedShiftIds.includes(s.id));
     const previewNames = selectedShifts.map(s => s.namaShift).join(', ');
 
     setDeleteModalState({
@@ -453,9 +541,14 @@ export const MasterData: React.FC = () => {
       itemDetails: `Shift: ${previewNames}. Data shift ini akan dihapus permanen dari sistem dan cloud database.`,
       requireTypingConfirmation: selectedShiftIds.length >= 3,
       onConfirm: async () => {
-        const res = await deleteMultipleShifts(selectedShiftIds);
-        setSelectedShiftIds([]);
-        showSuccessToast(`Berhasil menghapus ${res.count} shift piket.`);
+        try {
+          const res = await deleteMultipleShifts(selectedShiftIds);
+          setSelectedShiftIds([]);
+          showSuccessToast(`Berhasil menghapus ${res.count} shift piket.`);
+        } catch (err: any) {
+          logMasterDataError('HAPUS_MASSAL_SHIFT', err, { count: selectedShiftIds.length });
+          showErrorToast(err.message || 'Gagal menghapus shift piket.');
+        }
       }
     });
   };
@@ -523,14 +616,19 @@ export const MasterData: React.FC = () => {
 
   const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingUserId) {
-      await updateUser(editingUserId, userFormData);
-      showSuccessToast(`Perubahan pengguna '${userFormData.nama}' berhasil disimpan.`);
-    } else {
-      await createUser(userFormData);
-      showSuccessToast(`Pengguna baru '${userFormData.nama}' berhasil ditambahkan.`);
+    try {
+      if (editingUserId) {
+        await updateUser(editingUserId, userFormData);
+        showSuccessToast(`Perubahan pengguna '${userFormData.nama}' berhasil disimpan.`);
+      } else {
+        await createUser(userFormData);
+        showSuccessToast(`Pengguna baru '${userFormData.nama}' berhasil ditambahkan.`);
+      }
+      setShowUserModal(false);
+    } catch (err: any) {
+      logMasterDataError('SIMPAN_PENGGUNA', err, { user: userFormData.nama, editingId: editingUserId });
+      showErrorToast(err.message || 'Gagal menyimpan data pengguna.');
     }
-    setShowUserModal(false);
   };
 
   const handleOpenPostModal = (post?: DutyPost) => {
@@ -558,14 +656,19 @@ export const MasterData: React.FC = () => {
 
   const handleSavePost = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingPostId) {
-      await updatePost(editingPostId, postFormData);
-      showSuccessToast(`Pos piket '${postFormData.namaPos}' berhasil diperbarui.`);
-    } else {
-      await createPost(postFormData);
-      showSuccessToast(`Pos piket '${postFormData.namaPos}' berhasil ditambahkan.`);
+    try {
+      if (editingPostId) {
+        await updatePost(editingPostId, postFormData);
+        showSuccessToast(`Pos piket '${postFormData.namaPos}' berhasil diperbarui.`);
+      } else {
+        await createPost(postFormData);
+        showSuccessToast(`Pos piket '${postFormData.namaPos}' berhasil ditambahkan.`);
+      }
+      setShowPostModal(false);
+    } catch (err: any) {
+      logMasterDataError('SIMPAN_POS', err, { post: postFormData.namaPos, editingId: editingPostId });
+      showErrorToast(err.message || 'Gagal menyimpan data pos piket.');
     }
-    setShowPostModal(false);
   };
 
   const handleOpenShiftModal = (shift?: Shift) => {
@@ -593,69 +696,177 @@ export const MasterData: React.FC = () => {
 
   const handleSaveShift = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingShiftId) {
-      await updateShift(editingShiftId, shiftFormData);
-      showSuccessToast(`Shift '${shiftFormData.namaShift}' berhasil diperbarui.`);
-    } else {
-      await createShift(shiftFormData);
-      showSuccessToast(`Shift '${shiftFormData.namaShift}' berhasil ditambahkan.`);
+    try {
+      if (editingShiftId) {
+        await updateShift(editingShiftId, shiftFormData);
+        showSuccessToast(`Shift '${shiftFormData.namaShift}' berhasil diperbarui.`);
+      } else {
+        await createShift(shiftFormData);
+        showSuccessToast(`Shift '${shiftFormData.namaShift}' berhasil ditambahkan.`);
+      }
+      setShowShiftModal(false);
+    } catch (err: any) {
+      logMasterDataError('SIMPAN_SHIFT', err, { shift: shiftFormData.namaShift, editingId: editingShiftId });
+      showErrorToast(err.message || 'Gagal menyimpan data shift.');
     }
-    setShowShiftModal(false);
   };
 
   const handleSaveSchool = async (e: React.FormEvent) => {
     e.preventDefault();
-    await updateSchool(schoolForm);
-    showSuccessToast('Data profil sekolah berhasil diperbarui.');
+    try {
+      await updateSchool(schoolForm);
+      showSuccessToast('Data profil sekolah berhasil diperbarui.');
+    } catch (err: any) {
+      logMasterDataError('SIMPAN_PROFIL_SEKOLAH', err, { school: schoolForm.nama });
+      showErrorToast(err.message || 'Gagal menyimpan data profil sekolah.');
+    }
   };
 
   const handleExportUsers = () => {
-    const data = filteredAndSortedUsers.map((u, i) => ({
-      No: i + 1,
-      'Nama Lengkap': u.nama,
-      'Username': u.username || '',
-      'Role': u.role.toUpperCase(),
-      'NIP': u.nip || '-',
-      'NUPTK': u.nuptk || '-',
-      'Jabatan': u.jabatan,
-      'Unit Kerja': u.unitKerja || '',
-      'Email': u.email,
-      'No. HP': u.nomorHP,
-      'PIN Masuk': u.pin || '123456',
-      'Status': u.statusAktif ? 'Aktif' : 'Non-Aktif'
-    }));
-    exportToExcel(`Master_Pengguna_${new Date().toISOString().split('T')[0]}`, [
-      { name: 'Master Pengguna', data }
-    ]);
+    try {
+      const data = filteredAndSortedUsers.map((u, i) => ({
+        No: i + 1,
+        'Nama Lengkap': u.nama,
+        'Username': u.username || '',
+        'Role': u.role.toUpperCase(),
+        'NIP': u.nip || '-',
+        'NUPTK': u.nuptk || '-',
+        'Jabatan': u.jabatan,
+        'Unit Kerja': u.unitKerja || '',
+        'Email': u.email,
+        'No. HP': u.nomorHP,
+        'PIN Masuk': u.pin || '123456',
+        'Status': u.statusAktif ? 'Aktif' : 'Non-Aktif'
+      }));
+      exportToExcel(`Master_Pengguna_${new Date().toISOString().split('T')[0]}`, [
+        { name: 'Master Pengguna', data }
+      ]);
+      showSuccessToast('Berhasil mengekspor data master pengguna ke Excel.');
+    } catch (err: any) {
+      logMasterDataError('EKSPOR_PENGGUNA_EXCEL', err);
+      showErrorToast('Gagal mengekspor data pengguna.');
+    }
   };
 
   const handleExportPosts = () => {
-    const data = filteredAndSortedPosts.map((p, i) => ({
-      No: i + 1,
-      'Nama Pos': p.namaPos,
-      'Lokasi': p.lokasi,
-      'Jumlah Petugas': p.petugasRequiredCount,
-      'Deskripsi': p.deskripsi || '-',
-      'Status': p.statusAktif ? 'Aktif' : 'Non-Aktif'
-    }));
-    exportToExcel(`Master_Pos_Piket_${new Date().toISOString().split('T')[0]}`, [
-      { name: 'Master Pos Piket', data }
-    ]);
+    try {
+      const data = filteredAndSortedPosts.map((p, i) => ({
+        No: i + 1,
+        'Nama Pos': p.namaPos,
+        'Lokasi': p.lokasi,
+        'Jumlah Petugas': p.petugasRequiredCount,
+        'Deskripsi': p.deskripsi || '-',
+        'Status': p.statusAktif ? 'Aktif' : 'Non-Aktif'
+      }));
+      exportToExcel(`Master_Pos_Piket_${new Date().toISOString().split('T')[0]}`, [
+        { name: 'Master Pos Piket', data }
+      ]);
+      showSuccessToast('Berhasil mengekspor data pos piket ke Excel.');
+    } catch (err: any) {
+      logMasterDataError('EKSPOR_POS_EXCEL', err);
+      showErrorToast('Gagal mengekspor data pos piket.');
+    }
   };
 
   const handleExportShifts = () => {
-    const data = filteredAndSortedShifts.map((s, i) => ({
-      No: i + 1,
-      'Nama Shift': s.namaShift,
-      'Jam Mulai': s.jamMulai,
-      'Jam Selesai': s.jamSelesai,
-      'Keterangan': s.keterangan || '-',
-      'Status': s.statusAktif ? 'Aktif' : 'Non-Aktif'
-    }));
-    exportToExcel(`Master_Shift_${new Date().toISOString().split('T')[0]}`, [
-      { name: 'Master Shift', data }
-    ]);
+    try {
+      const data = filteredAndSortedShifts.map((s, i) => ({
+        No: i + 1,
+        'Nama Shift': s.namaShift,
+        'Jam Mulai': s.jamMulai,
+        'Jam Selesai': s.jamSelesai,
+        'Keterangan': s.keterangan || '-',
+        'Status': s.statusAktif ? 'Aktif' : 'Non-Aktif'
+      }));
+      exportToExcel(`Master_Shift_${new Date().toISOString().split('T')[0]}`, [
+        { name: 'Master Shift', data }
+      ]);
+      showSuccessToast('Berhasil mengekspor data shift ke Excel.');
+    } catch (err: any) {
+      logMasterDataError('EKSPOR_SHIFT_EXCEL', err);
+      showErrorToast('Gagal mengekspor data shift.');
+    }
   };
+
+  // Pre-render Loading & Integrity Error State
+  if (!isDataLoaded && !initLoadError) {
+    return (
+      <div className="space-y-6 animate-pulse p-2 sm:p-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
+          <div className="space-y-2">
+            <div className="h-7 w-64 bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
+            <div className="h-4 w-96 bg-slate-100 dark:bg-slate-850 rounded-lg"></div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="h-9 w-32 bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
+            <div className="h-9 w-40 bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
+          </div>
+        </div>
+
+        {/* Tab Skeletons */}
+        <div className="flex items-center gap-2 pb-2">
+          <div className="h-10 w-36 bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
+          <div className="h-10 w-32 bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
+          <div className="h-10 w-32 bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
+          <div className="h-10 w-36 bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
+        </div>
+
+        {/* Card & Table Skeleton */}
+        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="h-9 w-64 bg-slate-100 dark:bg-slate-800 rounded-xl"></div>
+            <div className="flex gap-2">
+              <div className="h-9 w-28 bg-slate-100 dark:bg-slate-800 rounded-xl"></div>
+              <div className="h-9 w-36 bg-slate-200 dark:bg-slate-700 rounded-xl"></div>
+            </div>
+          </div>
+
+          <div className="space-y-3 pt-4">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="h-14 bg-slate-50 dark:bg-slate-800/60 rounded-2xl flex items-center justify-between px-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700"></div>
+                  <div className="space-y-1">
+                    <div className="h-3.5 w-40 bg-slate-200 dark:bg-slate-700 rounded"></div>
+                    <div className="h-2.5 w-24 bg-slate-100 dark:bg-slate-800 rounded"></div>
+                  </div>
+                </div>
+                <div className="h-6 w-20 bg-slate-200 dark:bg-slate-700 rounded-full"></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (initLoadError) {
+    return (
+      <div className="p-6 sm:p-8 bg-white dark:bg-slate-900 rounded-3xl border border-rose-200 dark:border-rose-900/60 shadow-xs space-y-4 text-center max-w-xl mx-auto my-8">
+        <div className="w-14 h-14 bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 rounded-2xl flex items-center justify-center mx-auto">
+          <AlertTriangle className="w-7 h-7" />
+        </div>
+        <h3 className="text-base font-black text-slate-900 dark:text-white">
+          Gagal Menyiapkan Data Master
+        </h3>
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          {initLoadError} (Kejadian ini telah dicatat otomatis ke dalam Audit Log sistem).
+        </p>
+        <div className="pt-2 flex justify-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setIsDataLoaded(true);
+              setInitLoadError(null);
+            }}
+            className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-md cursor-pointer"
+          >
+            Coba Muat Ulang Modul
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -677,7 +888,7 @@ export const MasterData: React.FC = () => {
             </span>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-            Pusat konfigurasi data sekolah, master pengguna & guru ({users.filter(u => u.role === 'guru' || u.role === 'tendik').length} Guru/PTK), pos piket, shift, dan tahun ajaran.
+            Pusat konfigurasi data sekolah, master pengguna & guru ({(users || []).filter(u => u && (u.role === 'guru' || u.role === 'tendik')).length} Guru/PTK), pos piket, shift, dan tahun ajaran.
           </p>
         </div>
 
@@ -711,7 +922,7 @@ export const MasterData: React.FC = () => {
           }`}
         >
           <Users className="w-4 h-4" />
-          <span>Pengguna & Guru ({users.length})</span>
+          <span>Pengguna & Guru ({users?.length || 0})</span>
         </button>
 
         <button
@@ -723,7 +934,7 @@ export const MasterData: React.FC = () => {
           }`}
         >
           <MapPin className="w-4 h-4" />
-          <span>Pos Piket ({posts.length})</span>
+          <span>Pos Piket ({posts?.length || 0})</span>
         </button>
 
         <button
@@ -735,7 +946,7 @@ export const MasterData: React.FC = () => {
           }`}
         >
           <Clock className="w-4 h-4" />
-          <span>Shift Piket ({shifts.length})</span>
+          <span>Shift Piket ({shifts?.length || 0})</span>
         </button>
 
         <button
@@ -2009,5 +2220,89 @@ export const MasterData: React.FC = () => {
       />
 
     </div>
+  );
+};
+
+// React Error Boundary Class for MasterData Component
+interface ErrorBoundaryProps {
+  children: React.ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class MasterDataErrorBoundaryClass extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('[MasterDataErrorBoundary] Uncaught exception:', error, errorInfo);
+    try {
+      const savedLogs = localStorage.getItem('epiket_db_auditLogs');
+      const logs = savedLogs ? JSON.parse(savedLogs) : [];
+      const newAudit = {
+        id: `audit-err-${Date.now()}`,
+        userId: 'system',
+        userName: 'Sistem Error Boundary',
+        userRole: 'system',
+        action: 'CRITICAL_RENDER_ERROR',
+        module: 'Master Data',
+        details: `Terjadi exception pada render MasterData: ${error.message}. Stack: ${error.stack?.slice(0, 300) || '-'}`,
+        timestamp: new Date().toISOString()
+      };
+      localStorage.setItem('epiket_db_auditLogs', JSON.stringify([newAudit, ...logs]));
+    } catch (e) {
+      console.warn('Failed to record uncaught error to audit log storage:', e);
+    }
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-6 sm:p-8 bg-white dark:bg-slate-900 rounded-3xl border border-rose-200 dark:border-rose-900/60 shadow-xs space-y-4 text-center max-w-xl mx-auto my-8 animate-in fade-in">
+          <div className="w-14 h-14 bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 rounded-2xl flex items-center justify-center mx-auto">
+            <AlertTriangle className="w-7 h-7" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-base font-black text-slate-900 dark:text-white">
+              Terjadi Kendala pada Modul Master Data
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Sistem pelacakan error telah mencatat rincian pengecualian ke dalam audit log:
+            </p>
+            <div className="p-2.5 bg-rose-50 dark:bg-rose-950/40 rounded-xl text-[11px] font-mono text-rose-800 dark:text-rose-300 text-left overflow-x-auto max-h-24">
+              {this.state.error?.message || 'Unknown render exception'}
+            </div>
+          </div>
+          <div className="pt-2 flex justify-center gap-2">
+            <button
+              type="button"
+              onClick={() => this.setState({ hasError: false, error: null })}
+              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-md cursor-pointer transition active:scale-95"
+            >
+              Pulihkan Tampilan Modul
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+export const MasterData: React.FC = () => {
+  return (
+    <MasterDataErrorBoundaryClass>
+      <MasterDataContent />
+    </MasterDataErrorBoundaryClass>
   );
 };
