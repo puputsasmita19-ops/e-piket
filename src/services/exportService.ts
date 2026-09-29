@@ -743,4 +743,283 @@ export const exportImportErrorLog = (
 };
 
 
+/**
+ * 2.5. EKSPOR LAPORAN MINGGUAN PIKET (PDF)
+ */
+export const exportPicketWeeklyReportPDF = (
+  school: School,
+  weekStartStr: string,
+  weekEndStr: string,
+  schedules: DutySchedule[],
+  attendances: Attendance[],
+  incidents: Incident[]
+) => {
+  const doc = new jsPDF('portrait', 'mm', 'a4');
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+  let currentY = renderSchoolHeader(doc, school, pageWidth);
+
+  // Document Title
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.setTextColor(5, 150, 105); // emerald-600
+  doc.text('LAPORAN MINGGUAN e-PIKET GURU & TENAGA KEPENDIDIKAN', pageWidth / 2, currentY + 5, { align: 'center' });
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9.5);
+  doc.setTextColor(51, 65, 85);
+  doc.text(`Periode Minggu : ${formatDateIndo(weekStartStr)} s/d ${formatDateIndo(weekEndStr)}`, 14, currentY + 14);
+  doc.text(`Dicetak Pada   : ${new Date().toLocaleString('id-ID')}`, 14, currentY + 19);
+
+  // Weekly Summary Stats
+  const hadirCount = schedules.filter((s) => s.status === 'sedang_bertugas' || s.status === 'sudah_checkout').length;
+  const terlambatCount = schedules.filter((s) => s.status === 'terlambat').length;
+  const totalCount = schedules.length;
+  const disciplineRate = totalCount > 0 ? Math.round((hadirCount / totalCount) * 100) : 100;
+
+  // KPI Summary Strip Box
+  doc.setFillColor(241, 245, 249); // slate-100
+  doc.roundedRect(14, currentY + 23, pageWidth - 28, 12, 2, 2, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(15, 23, 42);
+  doc.text(`Ringkasan: Total Terjadwal: ${totalCount} | Tepat Waktu: ${hadirCount} | Terlambat: ${terlambatCount} | Kedisiplinan: ${disciplineRate}%`, 18, currentY + 30.5);
+
+  currentY += 40;
+
+  // Table 1: Kehadiran Petugas Piket
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(15, 23, 42);
+  doc.text('A. REKAP KEHADIRAN PETUGAS PIKET MINGGUAN', 14, currentY);
+  currentY += 3;
+
+  const attendanceRows = schedules.map((sch, index) => {
+    const att = attendances.find((a) => a.scheduleId === sch.id);
+    const checkIn = att?.checkInAt ? formatTimeIndo(att.checkInAt) : '-';
+    const checkOut = att?.checkOutAt ? formatTimeIndo(att.checkOutAt) : '-';
+    const durasi = att?.durasiMenit ? `${att.durasiMenit} mnt` : '-';
+    
+    let statusText = 'Belum Hadir';
+    if (sch.status === 'sedang_bertugas') statusText = 'Bertugas';
+    else if (sch.status === 'sudah_checkout') statusText = 'Selesai';
+    else if (sch.status === 'terlambat') statusText = 'Terlambat';
+    else if (sch.status === 'digantikan') statusText = `Diganti (${sch.originalUserName || 'Guru'})`;
+
+    return [
+      String(index + 1),
+      sch.tanggal ? formatDateIndo(sch.tanggal) : '-',
+      sch.hari || '-',
+      sch.postName || '-',
+      sch.userName || '-',
+      checkIn,
+      checkOut,
+      statusText
+    ];
+  });
+
+  autoTable(doc, {
+    startY: currentY,
+    head: [['No', 'Tanggal', 'Hari', 'Pos Piket', 'Nama Petugas', 'Masuk', 'Keluar', 'Status']],
+    body: attendanceRows.length > 0 ? attendanceRows : [['-', '-', '-', '-', 'Tidak ada jadwal petugas pada minggu ini', '-', '-', '-']],
+    theme: 'grid',
+    headStyles: { fillColor: [5, 150, 105], textColor: 255, fontStyle: 'bold', fontSize: 8 },
+    bodyStyles: { fontSize: 8, textColor: [30, 41, 59] },
+    margin: { left: 14, right: 14 }
+  });
+
+  currentY = (doc as any).lastAutoTable.finalY + 8;
+
+  // Table 2: Catatan Kejadian
+  if (currentY > 235) { doc.addPage(); currentY = 20; }
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(15, 23, 42);
+  doc.text('B. CATATAN KEJADIAN & KETERTIBAN MINGGUAN', 14, currentY);
+  currentY += 3;
+
+  const incidentRows = incidents.map((inc, index) => [
+    String(index + 1),
+    inc.tanggal ? formatDateIndo(inc.tanggal) : '-',
+    inc.waktu || '-',
+    inc.lokasi || '-',
+    inc.jenisKejadian || inc.kategori.toUpperCase(),
+    inc.deskripsi || '-',
+    inc.tindakanAwal || '-',
+    inc.status.toUpperCase()
+  ]);
+
+  autoTable(doc, {
+    startY: currentY,
+    head: [['No', 'Tanggal', 'Waktu', 'Lokasi', 'Kejadian', 'Uraian Kejadian', 'Tindakan Awal', 'Status']],
+    body: incidentRows.length > 0 ? incidentRows : [['-', '-', '-', '-', 'Minggu ini nihil kejadian ketertiban menonjol.', '-', '-', '-']],
+    theme: 'grid',
+    headStyles: { fillColor: [71, 85, 105], textColor: 255, fontStyle: 'bold', fontSize: 8 },
+    bodyStyles: { fontSize: 8, textColor: [30, 41, 59] },
+    margin: { left: 14, right: 14 }
+  });
+
+  currentY = (doc as any).lastAutoTable.finalY + 8;
+
+  // Signature Block
+  renderSignatureBlock(doc, school, pageWidth, currentY + 6, `${formatDateIndo(weekStartStr)} - ${formatDateIndo(weekEndStr)}`);
+
+  // Save PDF
+  doc.save(`Laporan_Mingguan_ePiket_${school.nama.replace(/\s+/g, '_')}_${weekStartStr}_${weekEndStr}.pdf`);
+};
+
+/**
+ * 2.6. EKSPOR LAPORAN REKAPITULASI SEMESTER PIKET (PDF)
+ */
+export const exportPicketSemesterReportPDF = (
+  school: School,
+  schoolYear: { tahunAjaran: string; semester: 'Ganjil' | 'Genap' },
+  schedules: DutySchedule[],
+  attendances: Attendance[],
+  incidents: Incident[],
+  posts: DutyPost[],
+  users: User[]
+) => {
+  const doc = new jsPDF('portrait', 'mm', 'a4');
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+  let currentY = renderSchoolHeader(doc, school, pageWidth);
+
+  // Document Title
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(13);
+  doc.setTextColor(5, 150, 105); // emerald-600
+  doc.text('LAPORAN REKAPITULASI SEMESTER e-PIKET GURU & TENDIK', pageWidth / 2, currentY + 5, { align: 'center' });
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9.5);
+  doc.setTextColor(51, 65, 85);
+  doc.text(`Tahun Ajaran : ${schoolYear.tahunAjaran} | Semester : ${schoolYear.semester}`, 14, currentY + 14);
+  doc.text(`Dicetak Pada : ${new Date().toLocaleString('id-ID')}`, 14, currentY + 19);
+
+  // Summary Stats
+  const totalSessions = schedules.length;
+  const onTimeCount = schedules.filter((s) => s.status === 'sedang_bertugas' || s.status === 'sudah_checkout').length;
+  const lateCount = schedules.filter((s) => s.status === 'terlambat').length;
+  const overallRate = totalSessions > 0 ? Math.round((onTimeCount / totalSessions) * 100) : 100;
+
+  // KPI Box
+  doc.setFillColor(241, 245, 249);
+  doc.roundedRect(14, currentY + 23, pageWidth - 28, 14, 2, 2, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(15, 23, 42);
+  doc.text(`Sesi Piket Semester: ${totalSessions} | Hadir Tepat Waktu: ${onTimeCount} (${overallRate}%) | Terlambat: ${lateCount} | Kejadian: ${incidents.length}`, 18, currentY + 31.5);
+
+  currentY += 42;
+
+  // Table 1: Rekapitulasi Kedisiplinan Petugas Piket
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(15, 23, 42);
+  doc.text('A. REKAPITULASI KEDISIPLINAN PETUGAS PIKET (GURU & TENDIK)', 14, currentY);
+  currentY += 3;
+
+  // Aggregate stats per user over semester
+  const userStats = users
+    .filter((u) => u.role === 'guru' || u.role === 'tendik')
+    .map((u) => {
+      const userSchs = schedules.filter((s) => s.userId === u.id);
+      const total = userSchs.length;
+      const onTime = userSchs.filter((s) => s.status === 'sedang_bertugas' || s.status === 'sudah_checkout').length;
+      const late = userSchs.filter((s) => s.status === 'terlambat').length;
+      const replaced = userSchs.filter((s) => s.isReplacement || s.status === 'digantikan').length;
+      const rate = total > 0 ? Math.round((onTime / total) * 100) : 100;
+      
+      let predikat = 'Sangat Tertib';
+      if (rate < 75) predikat = 'Perlu Pembinaan';
+      else if (rate < 90) predikat = 'Tertib';
+
+      return {
+        nama: u.nama,
+        nip: u.nip || '-',
+        role: u.role === 'guru' ? 'Guru' : 'Tendik',
+        total,
+        onTime,
+        late,
+        replaced,
+        rate,
+        predikat
+      };
+    })
+    .filter((u) => u.total > 0 || users.length <= 15);
+
+  const userRows = userStats.map((item, index) => [
+    String(index + 1),
+    item.nama,
+    item.nip,
+    item.role,
+    String(item.total),
+    String(item.onTime),
+    String(item.late),
+    String(item.replaced),
+    `${item.rate}%`,
+    item.predikat
+  ]);
+
+  autoTable(doc, {
+    startY: currentY,
+    head: [['No', 'Nama Petugas', 'NIP', 'Role', 'Jadwal', 'Tepat', 'Lambat', 'Ganti', 'Skor %', 'Predikat']],
+    body: userRows.length > 0 ? userRows : [['-', 'Belum ada data jadwal semester ini', '-', '-', '-', '-', '-', '-', '-', '-']],
+    theme: 'grid',
+    headStyles: { fillColor: [5, 150, 105], textColor: 255, fontStyle: 'bold', fontSize: 8 },
+    bodyStyles: { fontSize: 8, textColor: [30, 41, 59] },
+    margin: { left: 14, right: 14 }
+  });
+
+  currentY = (doc as any).lastAutoTable.finalY + 8;
+
+  // Table 2: Komparasi Kinerja Antar Pos Piket
+  if (currentY > 230) { doc.addPage(); currentY = 20; }
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(15, 23, 42);
+  doc.text('B. KOMPARASI & REKAP KINERJA POS PIKET SEMESTER', 14, currentY);
+  currentY += 3;
+
+  const postRows = posts.map((p, index) => {
+    const postSchs = schedules.filter((s) => s.postId === p.id);
+    const total = postSchs.length;
+    const onTime = postSchs.filter((s) => s.status === 'sedang_bertugas' || s.status === 'sudah_checkout').length;
+    const late = postSchs.filter((s) => s.status === 'terlambat').length;
+    const rate = total > 0 ? Math.round((onTime / total) * 100) : 100;
+
+    return [
+      String(index + 1),
+      p.namaPos,
+      p.lokasi,
+      String(p.petugasRequiredCount),
+      String(total),
+      String(onTime),
+      String(late),
+      `${rate}%`
+    ];
+  });
+
+  autoTable(doc, {
+    startY: currentY,
+    head: [['No', 'Nama Pos Piket', 'Lokasi Pos', 'Target/Shift', 'Total Sesi', 'Tepat Waktu', 'Terlambat', 'Ketertiban Pos']],
+    body: postRows,
+    theme: 'grid',
+    headStyles: { fillColor: [13, 148, 136], textColor: 255, fontStyle: 'bold', fontSize: 8 },
+    bodyStyles: { fontSize: 8, textColor: [30, 41, 59] },
+    margin: { left: 14, right: 14 }
+  });
+
+  currentY = (doc as any).lastAutoTable.finalY + 8;
+
+  // Signature Block
+  renderSignatureBlock(doc, school, pageWidth, currentY + 6, `Semester ${schoolYear.semester} TA ${schoolYear.tahunAjaran}`);
+
+  // Save PDF
+  doc.save(`Rekap_Semester_ePiket_${school.nama.replace(/\s+/g, '_')}_${schoolYear.tahunAjaran.replace('/', '_')}_${schoolYear.semester}.pdf`);
+};
+
+
+
 

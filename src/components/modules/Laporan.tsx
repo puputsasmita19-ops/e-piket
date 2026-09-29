@@ -8,7 +8,9 @@ import {
   exportPicketDailyReportPDF, 
   exportPicketMonthlyReportPDF, 
   exportPicketLogbookMonthlyPDF, 
-  exportToExcel 
+  exportToExcel,
+  exportPicketWeeklyReportPDF,
+  exportPicketSemesterReportPDF
 } from '../../services/exportService';
 import { uploadReportDocumentToDrive } from '../../services/driveService';
 import { CachedReport } from '../../services/indexedDb';
@@ -27,7 +29,8 @@ export const Laporan: React.FC = () => {
     logbooks, 
     handovers, 
     cachedReports,
-    cacheCurrentReport
+    cacheCurrentReport,
+    schoolYear
   } = useData();
 
   const [reportType, setReportType] = useState<'harian' | 'mingguan' | 'bulanan' | 'semester'>(() => {
@@ -55,14 +58,52 @@ export const Laporan: React.FC = () => {
   const [syncingDrive, setSyncingDrive] = useState(false);
   const [driveSyncSuccess, setDriveSyncSuccess] = useState<string | null>(null);
 
+  // Week range calculation helper
+  const getWeekRange = (dateStr: string) => {
+    if (!dateStr) return { start: '', end: '', startFormatted: '', endFormatted: '' };
+    const dateObj = new Date(dateStr);
+    if (isNaN(dateObj.getTime())) return { start: dateStr, end: dateStr, startFormatted: dateStr, endFormatted: dateStr };
+    
+    const day = dateObj.getDay();
+    // Adjust so start of the week is Monday
+    const diffToMonday = dateObj.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(dateObj);
+    monday.setDate(diffToMonday);
+    
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    
+    const formatYMD = (d: Date) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const r = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${r}`;
+    };
+    
+    const start = formatYMD(monday);
+    const end = formatYMD(sunday);
+    
+    return {
+      start,
+      end,
+      startFormatted: formatDateIndo(start),
+      endFormatted: formatDateIndo(end)
+    };
+  };
+
   // Filter schedules based on report type & criteria
   const filteredSchedules = useMemo(() => {
+    const weekRange = getWeekRange(selectedDate);
     return schedules.filter((s) => {
       let dateMatch = true;
       if (reportType === 'harian') {
         dateMatch = s.tanggal === selectedDate;
       } else if (reportType === 'bulanan') {
         dateMatch = Boolean(s && s.tanggal && typeof s.tanggal === 'string' && s.tanggal.startsWith(selectedDate.substring(0, 7)));
+      } else if (reportType === 'mingguan') {
+        dateMatch = Boolean(s && s.tanggal && typeof s.tanggal === 'string' && s.tanggal >= weekRange.start && s.tanggal <= weekRange.end);
+      } else if (reportType === 'semester') {
+        dateMatch = s.schoolYearId === schoolYear?.id;
       }
 
       const postMatch = selectedPost === 'all' || s.postId === selectedPost;
@@ -70,12 +111,15 @@ export const Laporan: React.FC = () => {
 
       return dateMatch && postMatch && userMatch;
     });
-  }, [schedules, reportType, selectedDate, selectedPost, selectedUser]);
+  }, [schedules, reportType, selectedDate, selectedPost, selectedUser, schoolYear]);
 
   const filteredIncidents = useMemo(() => {
+    const weekRange = getWeekRange(selectedDate);
     return incidents.filter((i) => {
       if (reportType === 'harian') return i.tanggal === selectedDate;
       if (reportType === 'bulanan') return Boolean(i && i.tanggal && typeof i.tanggal === 'string' && i.tanggal.startsWith(selectedDate.substring(0, 7)));
+      if (reportType === 'mingguan') return Boolean(i && i.tanggal && typeof i.tanggal === 'string' && i.tanggal >= weekRange.start && i.tanggal <= weekRange.end);
+      if (reportType === 'semester') return i.tanggal ? true : false; // all incidents
       return true;
     });
   }, [incidents, reportType, selectedDate]);
@@ -121,6 +165,40 @@ export const Laporan: React.FC = () => {
     }).filter((item) => selectedPost === 'all' || item.post.id === selectedPost);
   }, [posts, schedules, selectedDate, selectedPost]);
 
+  // Semester aggregated stats per teacher (for semester view & export)
+  const semesterTeacherStats = useMemo(() => {
+    const semesterSchs = schedules.filter((s) => s.schoolYearId === schoolYear?.id);
+    return users
+      .filter((u) => u.role === 'guru' || u.role === 'tendik')
+      .map((u) => {
+        const userSchs = semesterSchs.filter((s) => s.userId === u.id);
+        const total = userSchs.length;
+        const onTime = userSchs.filter((s) => s.status === 'sedang_bertugas' || s.status === 'sudah_checkout').length;
+        const late = userSchs.filter((s) => s.status === 'terlambat').length;
+        const replaced = userSchs.filter((s) => s.isReplacement || s.status === 'digantikan').length;
+        const rate = total > 0 ? Math.round((onTime / total) * 100) : 100;
+        let predikat = 'Sangat Tertib';
+        if (rate < 75) predikat = 'Perlu Pembinaan';
+        else if (rate < 90) predikat = 'Tertib';
+
+        return { user: u, total, onTime, late, replaced, rate, predikat };
+      })
+      .filter((item) => selectedUser === 'all' || item.user.id === selectedUser);
+  }, [users, schedules, schoolYear, selectedUser]);
+
+  // Semester aggregated stats per post
+  const semesterPostStats = useMemo(() => {
+    const semesterSchs = schedules.filter((s) => s.schoolYearId === schoolYear?.id);
+    return posts.map((p) => {
+      const postSchs = semesterSchs.filter((s) => s.postId === p.id);
+      const total = postSchs.length;
+      const onTime = postSchs.filter((s) => s.status === 'sedang_bertugas' || s.status === 'sudah_checkout').length;
+      const late = postSchs.filter((s) => s.status === 'terlambat').length;
+      const rate = total > 0 ? Math.round((onTime / total) * 100) : 100;
+      return { post: p, total, onTime, late, rate };
+    }).filter((item) => selectedPost === 'all' || item.post.id === selectedPost);
+  }, [posts, schedules, schoolYear, selectedPost]);
+
   /**
    * Action 1: Export Daily Report PDF
    */
@@ -138,6 +216,21 @@ export const Laporan: React.FC = () => {
       dayIncidents,
       dayLogs,
       dayHandovers
+    );
+  };
+
+  /**
+   * Action 1.5: Export Weekly Report PDF
+   */
+  const handlePrintWeeklyPDF = () => {
+    const weekRange = getWeekRange(selectedDate);
+    exportPicketWeeklyReportPDF(
+      school,
+      weekRange.start,
+      weekRange.end,
+      filteredSchedules,
+      attendances,
+      filteredIncidents
     );
   };
 
@@ -163,6 +256,21 @@ export const Laporan: React.FC = () => {
   };
 
   /**
+   * Action 2.5: Export Semester Recap PDF
+   */
+  const handlePrintSemesterPDF = () => {
+    exportPicketSemesterReportPDF(
+      school,
+      schoolYear || { tahunAjaran: '2026/2027', semester: 'Ganjil' },
+      filteredSchedules,
+      attendances,
+      filteredIncidents,
+      posts,
+      users
+    );
+  };
+
+  /**
    * Action 3: Export Monthly Picket Logbook (Buku Piket) PDF
    */
   const handlePrintLogbookMonthlyPDF = () => {
@@ -180,8 +288,12 @@ export const Laporan: React.FC = () => {
    * Universal Smart PDF Print
    */
   const handlePrintPDF = () => {
-    if (reportType === 'bulanan' || reportType === 'semester') {
+    if (reportType === 'bulanan') {
       handlePrintMonthlyPDF();
+    } else if (reportType === 'semester') {
+      handlePrintSemesterPDF();
+    } else if (reportType === 'mingguan') {
+      handlePrintWeeklyPDF();
     } else {
       handlePrintDailyPDF();
     }
@@ -338,25 +450,50 @@ export const Laporan: React.FC = () => {
             </button>
           )}
           
-          {/* Tombol Cetak PDF Harian */}
-          <button
-            onClick={handlePrintDailyPDF}
-            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/30 transition-all active:scale-95 cursor-pointer"
-            title="Ekspor Laporan Harian ke Format PDF Resmi"
-          >
-            <Printer className="w-4 h-4" />
-            <span>PDF Harian</span>
-          </button>
+          {/* Tombol Cetak PDF Dinamis Berdasarkan Tipe Laporan */}
+          {reportType === 'harian' && (
+            <button
+              onClick={handlePrintDailyPDF}
+              className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/30 transition-all active:scale-95 cursor-pointer"
+              title="Ekspor Laporan Harian ke Format PDF Resmi"
+            >
+              <Printer className="w-4 h-4" />
+              <span>Cetak PDF Harian</span>
+            </button>
+          )}
 
-          {/* Tombol Cetak PDF Bulanan */}
-          <button
-            onClick={handlePrintMonthlyPDF}
-            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-md shadow-teal-600/30 transition-all active:scale-95 cursor-pointer"
-            title="Ekspor Rekapitulasi Bulanan ke Format PDF Resmi"
-          >
-            <FileDown className="w-4 h-4 text-amber-200" />
-            <span>PDF Rekap Bulanan</span>
-          </button>
+          {reportType === 'mingguan' && (
+            <button
+              onClick={handlePrintWeeklyPDF}
+              className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/30 transition-all active:scale-95 cursor-pointer"
+              title="Ekspor Laporan Mingguan ke Format PDF Resmi"
+            >
+              <Printer className="w-4 h-4" />
+              <span>Cetak PDF Mingguan</span>
+            </button>
+          )}
+
+          {reportType === 'bulanan' && (
+            <button
+              onClick={handlePrintMonthlyPDF}
+              className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-md shadow-teal-600/30 transition-all active:scale-95 cursor-pointer"
+              title="Ekspor Rekapitulasi Bulanan ke Format PDF Resmi"
+            >
+              <FileDown className="w-4 h-4 text-amber-200" />
+              <span>Cetak PDF Rekap Bulanan</span>
+            </button>
+          )}
+
+          {reportType === 'semester' && (
+            <button
+              onClick={handlePrintSemesterPDF}
+              className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-md shadow-amber-600/30 transition-all active:scale-95 cursor-pointer"
+              title="Ekspor Rekapitulasi Semester ke Format PDF Resmi"
+            >
+              <FileDown className="w-4 h-4 text-white" />
+              <span>Cetak PDF Rekap Semester</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -380,7 +517,15 @@ export const Laporan: React.FC = () => {
             </div>
           </div>
           <span className="text-[11px] font-mono px-2.5 py-1 rounded-full bg-white/10 text-emerald-300 border border-white/10 self-start sm:self-center">
-            Periode: {formatMonthYearIndo(selectedDate.substring(0, 7))}
+            Periode: {
+              reportType === 'bulanan'
+                ? formatMonthYearIndo(selectedDate.substring(0, 7))
+                : reportType === 'mingguan'
+                ? `${getWeekRange(selectedDate).startFormatted} - ${getWeekRange(selectedDate).endFormatted}`
+                : reportType === 'semester'
+                ? `${schoolYear?.semester || 'Semester'} TA ${schoolYear?.tahunAjaran || 'Aktif'}`
+                : formatDateIndo(selectedDate)
+            }
           </span>
         </div>
 
@@ -557,7 +702,15 @@ export const Laporan: React.FC = () => {
           <div className="flex items-center gap-2">
             <Zap className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
             <span className="text-slate-700 dark:text-slate-300">
-              Format Aktif: <strong>{reportType === 'bulanan' ? `Rekapitulasi Bulanan (${formatMonthYearIndo(selectedDate.substring(0, 7))})` : `Laporan Harian (${formatDateIndo(selectedDate)})`}</strong>
+              Format Aktif: <strong>{
+                reportType === 'bulanan' 
+                  ? `Rekapitulasi Bulanan (${formatMonthYearIndo(selectedDate.substring(0, 7))})` 
+                  : reportType === 'mingguan'
+                  ? `Rekapitulasi Mingguan (${getWeekRange(selectedDate).startFormatted} - ${getWeekRange(selectedDate).endFormatted})`
+                  : reportType === 'semester'
+                  ? `Rekapitulasi Semester (${schoolYear?.semester || 'Semester'} TA ${schoolYear?.tahunAjaran || 'Aktif'})`
+                  : `Laporan Harian (${formatDateIndo(selectedDate)})`
+              }</strong>
             </span>
           </div>
 
@@ -569,6 +722,22 @@ export const Laporan: React.FC = () => {
               >
                 <FileDown className="w-3.5 h-3.5 text-amber-200" />
                 <span>Unduh PDF Rekap Bulanan</span>
+              </button>
+            ) : reportType === 'mingguan' ? (
+              <button
+                onClick={handlePrintWeeklyPDF}
+                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs transition"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Unduh PDF Laporan Mingguan</span>
+              </button>
+            ) : reportType === 'semester' ? (
+              <button
+                onClick={handlePrintSemesterPDF}
+                className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs transition"
+              >
+                <FileDown className="w-3.5 h-3.5" />
+                <span>Unduh PDF Rekap Semester</span>
               </button>
             ) : (
               <button
@@ -634,10 +803,22 @@ export const Laporan: React.FC = () => {
             <h3 className="text-sm font-black uppercase text-slate-900 dark:text-white tracking-wider">
               {reportType === 'bulanan'
                 ? 'REKAPITULASI BULANAN e-PIKET GURU & TENAGA KEPENDIDIKAN'
+                : reportType === 'mingguan'
+                ? 'REKAPITULASI MINGGUAN e-PIKET GURU & TENAGA KEPENDIDIKAN'
+                : reportType === 'semester'
+                ? 'REKAPITULASI SEMESTER e-PIKET GURU & TENAGA KEPENDIDIKAN'
                 : `LAPORAN HARIAN e-PIKET GURU & TENAGA KEPENDIDIKAN`}
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Periode: {reportType === 'bulanan' ? formatMonthYearIndo(selectedDate.substring(0, 7)) : formatDateIndo(selectedDate)}
+              Periode: {
+                reportType === 'bulanan' 
+                  ? formatMonthYearIndo(selectedDate.substring(0, 7)) 
+                  : reportType === 'mingguan'
+                  ? `${getWeekRange(selectedDate).startFormatted} s/d ${getWeekRange(selectedDate).endFormatted}`
+                  : reportType === 'semester'
+                  ? `${schoolYear?.semester || 'Semester'} TA ${schoolYear?.tahunAjaran || 'Aktif'}`
+                  : formatDateIndo(selectedDate)
+              }
             </p>
           </div>
 
@@ -653,7 +834,7 @@ export const Laporan: React.FC = () => {
         </div>
 
         {/* VIEW 1: BULANAN (REKAP GURU & KOMPARASI POS) */}
-        {reportType === 'bulanan' ? (
+        {reportType === 'bulanan' && (
           <div className="space-y-6">
             
             {/* Table A: Rekap Disiplin Guru Bulanan */}
@@ -794,8 +975,10 @@ export const Laporan: React.FC = () => {
             </div>
 
           </div>
-        ) : (
-          /* VIEW 2: HARIAN */
+        )}
+
+        {/* VIEW 2: HARIAN */}
+        {reportType === 'harian' && (
           <div className="space-y-6">
             
             {/* Attendance Table */}
@@ -884,6 +1067,197 @@ export const Laporan: React.FC = () => {
           </div>
         )}
 
+        {/* VIEW 3: MINGGUAN */}
+        {reportType === 'mingguan' && (
+          <div className="space-y-6">
+            
+            {/* Table A: Kehadiran Mingguan */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold uppercase text-slate-700 dark:text-slate-300">
+                A. Daftar Kehadiran Petugas Pos Piket Mingguan
+              </h4>
+              <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-800">
+                    <tr>
+                      <th className="py-2.5 px-3">No</th>
+                      <th className="py-2.5 px-3">Tanggal</th>
+                      <th className="py-2.5 px-3">Hari</th>
+                      <th className="py-2.5 px-3">Pos Piket</th>
+                      <th className="py-2.5 px-3">Nama Petugas</th>
+                      <th className="py-2.5 px-3">Masuk</th>
+                      <th className="py-2.5 px-3">Keluar</th>
+                      <th className="py-2.5 px-3">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {filteredSchedules.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="text-center py-6 text-slate-400 dark:text-slate-500">Tidak ada jadwal pada minggu ini.</td>
+                      </tr>
+                    ) : (
+                      filteredSchedules.map((sch, i) => {
+                        const att = attendances.find((a) => a.scheduleId === sch.id);
+                        return (
+                          <tr key={sch.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                            <td className="py-2 px-3 text-slate-500 dark:text-slate-400">{i + 1}</td>
+                            <td className="py-2 px-3 font-mono">{sch.tanggal ? formatDateIndo(sch.tanggal) : '-'}</td>
+                            <td className="py-2 px-3 font-medium text-slate-700 dark:text-slate-300">{sch.hari}</td>
+                            <td className="py-2 px-3 font-semibold text-slate-800 dark:text-slate-200">{sch.postName}</td>
+                            <td className="py-2 px-3 text-emerald-800 dark:text-emerald-400 font-bold">{sch.userName}</td>
+                            <td className="py-2 px-3 font-mono text-slate-600 dark:text-slate-300">{att?.checkInAt ? formatTimeIndo(att.checkInAt) : '-'}</td>
+                            <td className="py-2 px-3 font-mono text-slate-600 dark:text-slate-300">{att?.checkOutAt ? formatTimeIndo(att.checkOutAt) : '-'}</td>
+                            <td className="py-2 px-3 font-bold capitalize text-[11px] text-slate-700 dark:text-slate-300">{sch.status.replace('_', ' ')}</td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Table B: Catatan Kejadian */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold uppercase text-slate-700 dark:text-slate-300">B. Catatan Kejadian & Ketertiban Mingguan</h4>
+              <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-800">
+                    <tr>
+                      <th className="py-2.5 px-3">No</th>
+                      <th className="py-2.5 px-3">Tanggal / Waktu</th>
+                      <th className="py-2.5 px-3">Lokasi</th>
+                      <th className="py-2.5 px-3">Kategori</th>
+                      <th className="py-2.5 px-3">Uraian Kejadian</th>
+                      <th className="py-2.5 px-3">Tindakan Awal</th>
+                      <th className="py-2.5 px-3">Pelapor</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {filteredIncidents.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="text-center py-4 text-slate-400 dark:text-slate-500">Nihil kejadian menonjol minggu ini.</td>
+                      </tr>
+                    ) : (
+                      filteredIncidents.map((inc, i) => (
+                        <tr key={inc.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                          <td className="py-2 px-3 text-slate-500 dark:text-slate-400">{i + 1}</td>
+                          <td className="py-2 px-3 font-mono text-slate-700 dark:text-slate-300">{formatDateIndo(inc.tanggal)} {inc.waktu}</td>
+                          <td className="py-2 px-3 font-semibold text-slate-800 dark:text-slate-200">{inc.lokasi}</td>
+                          <td className="py-2 px-3 uppercase text-[10px] font-bold text-slate-600 dark:text-slate-400">{inc.kategori}</td>
+                          <td className="py-2 px-3 text-slate-800 dark:text-slate-200">{inc.deskripsi}</td>
+                          <td className="py-2 px-3 text-slate-700 dark:text-slate-300">{inc.tindakanAwal}</td>
+                          <td className="py-2 px-3 text-emerald-800 dark:text-emerald-400 font-medium">{inc.createdByUserName}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* VIEW 4: SEMESTER */}
+        {reportType === 'semester' && (
+          <div className="space-y-6">
+            
+            {/* Table A: Rekap Kedisiplinan Guru Semester */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold uppercase text-slate-700 dark:text-slate-300">
+                A. Rekapitulasi Kehadiran & Kedisiplinan Petugas Piket Semester ({schoolYear?.semester || 'Semester'} TA {schoolYear?.tahunAjaran || 'Aktif'})
+              </h4>
+              <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-800">
+                    <tr>
+                      <th className="py-2.5 px-3">No</th>
+                      <th className="py-2.5 px-3">Nama Petugas</th>
+                      <th className="py-2.5 px-3">NIP</th>
+                      <th className="py-2.5 px-3">Role</th>
+                      <th className="py-2.5 px-3">Total Jadwal</th>
+                      <th className="py-2.5 px-3">Tepat Waktu</th>
+                      <th className="py-2.5 px-3">Terlambat</th>
+                      <th className="py-2.5 px-3">Kedisiplinan</th>
+                      <th className="py-2.5 px-3">Predikat</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {semesterTeacherStats.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="text-center py-6 text-slate-400 dark:text-slate-500">Belum ada data jadwal semester ini.</td>
+                      </tr>
+                    ) : (
+                      semesterTeacherStats.map((item, idx) => (
+                        <tr key={item.user.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                          <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400">{idx + 1}</td>
+                          <td className="py-2.5 px-3 font-bold text-slate-800 dark:text-slate-200">{item.user.nama}</td>
+                          <td className="py-2.5 px-3 font-mono text-[11px] text-slate-500 dark:text-slate-400">{item.user.nip || '-'}</td>
+                          <td className="py-2.5 px-3 text-slate-600 dark:text-slate-300 capitalize">{item.user.role}</td>
+                          <td className="py-2.5 px-3 font-bold">{item.total}</td>
+                          <td className="py-2.5 px-3 text-emerald-700 dark:text-emerald-400 font-bold">{item.onTime}</td>
+                          <td className="py-2.5 px-3 text-amber-700 dark:text-amber-400 font-bold">{item.late}</td>
+                          <td className="py-2.5 px-3 font-mono font-bold text-slate-800 dark:text-slate-200">{item.rate}%</td>
+                          <td className="py-2.5 px-3">
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              item.rate >= 90 
+                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' 
+                                : item.rate >= 75 
+                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300' 
+                                : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                            }`}>
+                              {item.predikat}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Table B: Komparasi Pos Piket Semester */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold uppercase text-slate-700 dark:text-slate-300">
+                B. Komparasi & Rekapitulasi Pos Piket Semester
+              </h4>
+              <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-800">
+                    <tr>
+                      <th className="py-2.5 px-3">No</th>
+                      <th className="py-2.5 px-3">Nama Pos Piket</th>
+                      <th className="py-2.5 px-3">Lokasi</th>
+                      <th className="py-2.5 px-3">Target Shift</th>
+                      <th className="py-2.5 px-3">Total Sesi</th>
+                      <th className="py-2.5 px-3">Tepat Waktu</th>
+                      <th className="py-2.5 px-3">Terlambat</th>
+                      <th className="py-2.5 px-3">Kedisiplinan Pos</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {semesterPostStats.map((item, idx) => (
+                      <tr key={item.post.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400">{idx + 1}</td>
+                        <td className="py-2.5 px-3 font-bold text-slate-800 dark:text-slate-200">{item.post.namaPos}</td>
+                        <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400">{item.post.lokasi}</td>
+                        <td className="py-2.5 px-3">{item.post.petugasRequiredCount} orang</td>
+                        <td className="py-2.5 px-3 font-bold">{item.total}</td>
+                        <td className="py-2.5 px-3 text-emerald-700 dark:text-emerald-400 font-bold">{item.onTime}</td>
+                        <td className="py-2.5 px-3 text-amber-700 dark:text-amber-400 font-bold">{item.late}</td>
+                        <td className="py-2.5 px-3 font-mono font-bold text-teal-700 dark:text-teal-400">{item.rate}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+        )}
+
         {/* Signatures Preview */}
         <div className="pt-8 grid grid-cols-2 text-xs text-slate-800 dark:text-slate-200">
           <div className="text-left">
@@ -895,7 +1269,17 @@ export const Laporan: React.FC = () => {
           </div>
 
           <div className="text-right">
-            <p>{school.kabupaten || 'Jakarta'}, {reportType === 'bulanan' ? formatMonthYearIndo(selectedDate.substring(0, 7)) : formatDateIndo(selectedDate)}</p>
+            <p>
+              {school.kabupaten || 'Jakarta'}, {
+                reportType === 'bulanan' 
+                  ? formatMonthYearIndo(selectedDate.substring(0, 7)) 
+                  : reportType === 'mingguan'
+                  ? `${getWeekRange(selectedDate).startFormatted} - ${getWeekRange(selectedDate).endFormatted}`
+                  : reportType === 'semester'
+                  ? `TA ${schoolYear?.tahunAjaran || 'Aktif'}`
+                  : formatDateIndo(selectedDate)
+              }
+            </p>
             <p className="font-bold mt-1">Koordinator Piket Sekolah</p>
             <div className="h-16"></div>
             <p className="font-bold text-slate-900 dark:text-white">Bambang Hermawan, S.Kom</p>
