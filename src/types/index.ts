@@ -254,7 +254,7 @@ export interface AttachmentMeta {
   thumbnailUrl?: string;
   uploadedBy: string;
   uploadedAt: string;
-  entityType: 'incident' | 'logbook' | 'profile' | 'report' | 'general';
+  entityType: 'incident' | 'logbook' | 'profile' | 'report' | 'attendance' | 'general';
   entityId?: string;
   isUploadedToDrive?: boolean;
 }
@@ -319,6 +319,14 @@ export interface GoogleDriveConfig {
   lastSyncAt: string;
   folderHierarchyTemplate: string;
   autoSyncEnabled: boolean;
+  subfolders?: {
+    presensiFolderId?: string;
+    logbookFolderId?: string;
+    incidentFolderId?: string;
+    reportPdfFolderId?: string;
+    backupFolderId?: string;
+    profileFolderId?: string;
+  };
 }
 
 export interface WhatsAppConfig {

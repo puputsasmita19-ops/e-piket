@@ -10,7 +10,12 @@ import { antiFraudService } from '../../services/antiFraudService';
 import { IncidentPhotoCacheModal } from '../common/IncidentPhotoCacheModal';
 import { SchoolGpsConfigPanel } from '../admin/SchoolGpsConfigPanel';
 import { incidentPhotoCache } from '../../services/incidentPhotoCacheService';
-import { autoSyncDatabaseToDrive, listDrivePicketFiles } from '../../services/driveService';
+import { 
+  autoSyncDatabaseToDrive, 
+  listDrivePicketFiles, 
+  setupAutomaticCommercialFolderStructure, 
+  CommercialFolderStructureResult 
+} from '../../services/driveService';
 import { extractDriveFolderId } from '../../services/googleDriveService';
 import { showSuccessToast } from '../../utils/toast';
 import { AdminPanicModeModal } from '../modals/AdminPanicModeModal';
@@ -240,6 +245,68 @@ export const PengaturanSistem: React.FC = () => {
       setDriveMessage(`❌ Kendala Google Drive API: ${err.message}`);
     } finally {
       setTestingDrive(false);
+    }
+  };
+
+  const [isSettingUpFolders, setIsSettingUpFolders] = useState(false);
+  const [folderStructureResult, setFolderStructureResult] = useState<CommercialFolderStructureResult | null>(null);
+
+  const handleAutoSetupDriveFolders = async () => {
+    setIsSettingUpFolders(true);
+    setDriveMessage(null);
+    try {
+      let token = await getDriveAccessToken();
+      if (!token) {
+        const connRes = await connectGoogleDrive();
+        if (!connRes.success) {
+          setDriveMessage(`Hubungkan Google Drive terlebih dahulu: ${connRes.message}`);
+          setIsSettingUpFolders(false);
+          return;
+        }
+        token = await getDriveAccessToken();
+      }
+
+      if (!token) {
+        setDriveMessage('Gagal memperoleh token akses Google Drive. Silakan klik "Hubungkan Google Drive".');
+        setIsSettingUpFolders(false);
+        return;
+      }
+
+      const result = await setupAutomaticCommercialFolderStructure(formData.school.nama || school.nama || 'Sekolah', token);
+      setFolderStructureResult(result);
+
+      // Save the newly created root folder and subfolder IDs to settings
+      const updatedDriveConfig = {
+        ...formData.googleDrive,
+        rootFolderId: result.rootFolder.id,
+        rootFolderName: result.rootFolder.name,
+        isConnected: true,
+        lastSyncAt: new Date().toISOString(),
+        subfolders: {
+          presensiFolderId: result.subfolders.presensi.id,
+          logbookFolderId: result.subfolders.bukuPiket.id,
+          incidentFolderId: result.subfolders.insiden.id,
+          reportPdfFolderId: result.subfolders.rekapPdf.id,
+          backupFolderId: result.subfolders.backupDatabase.id,
+          profileFolderId: result.subfolders.fotoProfil.id
+        }
+      };
+
+      setFormData((prev) => ({
+        ...prev,
+        googleDrive: updatedDriveConfig
+      }));
+
+      await updateSystemSettings({
+        googleDrive: updatedDriveConfig
+      });
+
+      showSuccessToast('Struktur folder Google Drive komersil berhasil dibuat!');
+      setDriveMessage(`✅ Struktur folder komersil aktif: "${result.rootFolder.name}" dengan 6 subfolder terpisah.`);
+    } catch (err: any) {
+      setDriveMessage(`❌ Gagal otomatisasi folder: ${err.message}`);
+    } finally {
+      setIsSettingUpFolders(false);
     }
   };
 
@@ -1280,6 +1347,124 @@ export const PengaturanSistem: React.FC = () => {
                 </div>
               )}
 
+              {/* Commercial Automatic Folder Hierarchy Setup Card */}
+              <div className="p-4 bg-emerald-50/70 dark:bg-emerald-950/40 rounded-2xl border border-emerald-200 dark:border-emerald-800 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-xs font-bold text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5">
+                      <FolderSync className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                      <span>Otomatisasi Struktur Folder Google Drive (Siap Komersil)</span>
+                    </h4>
+                    <p className="text-[11px] text-emerald-700 dark:text-emerald-300/90 mt-0.5">
+                      Membuat folder utama <strong>"E-Piket Digital - {formData.school.nama || school.nama}"</strong> dan 6 subfolder terisolasi di Google Drive dengan 1 klik.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleAutoSetupDriveFolders}
+                    disabled={isSettingUpFolders || !isGoogleDriveConnected}
+                    className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-sm transition active:scale-95 cursor-pointer shrink-0"
+                  >
+                    <FolderSync className={`w-3.5 h-3.5 ${isSettingUpFolders ? 'animate-spin' : ''}`} />
+                    <span>{isSettingUpFolders ? 'Menata Folder...' : '⚡ Buat/Verifikasi Struktur Folder'}</span>
+                  </button>
+                </div>
+
+                {folderStructureResult && (
+                  <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-emerald-300 dark:border-emerald-800 text-xs space-y-2 animate-in fade-in">
+                    <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                      <span className="font-bold text-emerald-800 dark:text-emerald-300">
+                        📁 Folder Utama: {folderStructureResult.rootFolder.name}
+                      </span>
+                      <a
+                        href={folderStructureResult.rootFolder.webViewLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold hover:underline flex items-center gap-1"
+                      >
+                        <span>Buka di Google Drive</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-[11px]">
+                      <a
+                        href={folderStructureResult.subfolders.presensi.webViewLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 border border-slate-200 dark:border-slate-700 flex items-center justify-between group"
+                      >
+                        <span className="font-medium text-slate-700 dark:text-slate-300 group-hover:text-emerald-700 dark:group-hover:text-emerald-300">
+                          📷 01_Foto_Presensi_Selfie
+                        </span>
+                        <ExternalLink className="w-3 h-3 text-slate-400 group-hover:text-emerald-600" />
+                      </a>
+
+                      <a
+                        href={folderStructureResult.subfolders.bukuPiket.webViewLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 border border-slate-200 dark:border-slate-700 flex items-center justify-between group"
+                      >
+                        <span className="font-medium text-slate-700 dark:text-slate-300 group-hover:text-emerald-700 dark:group-hover:text-emerald-300">
+                          📖 02_Dokumentasi_Buku_Piket
+                        </span>
+                        <ExternalLink className="w-3 h-3 text-slate-400 group-hover:text-emerald-600" />
+                      </a>
+
+                      <a
+                        href={folderStructureResult.subfolders.insiden.webViewLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 border border-slate-200 dark:border-slate-700 flex items-center justify-between group"
+                      >
+                        <span className="font-medium text-slate-700 dark:text-slate-300 group-hover:text-emerald-700 dark:group-hover:text-emerald-300">
+                          🚨 03_Laporan_Insiden_Kejadian
+                        </span>
+                        <ExternalLink className="w-3 h-3 text-slate-400 group-hover:text-emerald-600" />
+                      </a>
+
+                      <a
+                        href={folderStructureResult.subfolders.rekapPdf.webViewLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 border border-slate-200 dark:border-slate-700 flex items-center justify-between group"
+                      >
+                        <span className="font-medium text-slate-700 dark:text-slate-300 group-hover:text-emerald-700 dark:group-hover:text-emerald-300">
+                          📄 04_Rekap_Laporan_PDF_Resmi
+                        </span>
+                        <ExternalLink className="w-3 h-3 text-slate-400 group-hover:text-emerald-600" />
+                      </a>
+
+                      <a
+                        href={folderStructureResult.subfolders.backupDatabase.webViewLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 border border-slate-200 dark:border-slate-700 flex items-center justify-between group"
+                      >
+                        <span className="font-medium text-slate-700 dark:text-slate-300 group-hover:text-emerald-700 dark:group-hover:text-emerald-300">
+                          💾 05_Cadangan_Database_Sistem
+                        </span>
+                        <ExternalLink className="w-3 h-3 text-slate-400 group-hover:text-emerald-600" />
+                      </a>
+
+                      <a
+                        href={folderStructureResult.subfolders.fotoProfil.webViewLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 border border-slate-200 dark:border-slate-700 flex items-center justify-between group"
+                      >
+                        <span className="font-medium text-slate-700 dark:text-slate-300 group-hover:text-emerald-700 dark:group-hover:text-emerald-300">
+                          👤 06_Foto_Profil_Guru_Staf
+                        </span>
+                        <ExternalLink className="w-3 h-3 text-slate-400 group-hover:text-emerald-600" />
+                      </a>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Drive Folder Structure Fields */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs pt-1">
                 <div>
@@ -1296,7 +1481,7 @@ export const PengaturanSistem: React.FC = () => {
                   </div>
                   <input
                     type="text"
-                    value={formData.googleDrive.rootFolderId || '18lJTqdfpB0NtY23aaxoAvq84GiTcCksQ'}
+                    value={formData.googleDrive.rootFolderId || ''}
                     onChange={(e) =>
                       setFormData({
                         ...formData,
@@ -1310,11 +1495,11 @@ export const PengaturanSistem: React.FC = () => {
                         googleDrive: { ...prev.googleDrive, rootFolderId: clean }
                       }));
                     }}
-                    placeholder="18lJTqdfpB0NtY23aaxoAvq84GiTcCksQ"
+                    placeholder="Contoh: 18lJTqdfpB0NtY23aaxoAvq84GiTcCksQ (atau otomatis dibuat)"
                     className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl font-mono text-slate-800 dark:text-slate-100"
                   />
                   <span className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 block">
-                    Folder ID Google Drive tujuan: <strong className="font-mono text-emerald-700 dark:text-emerald-400">18lJTqdfpB0NtY23aaxoAvq84GiTcCksQ</strong>
+                    Folder ID Google Drive tujuan: <strong className="font-mono text-emerald-700 dark:text-emerald-400">{formData.googleDrive.rootFolderId || 'Otomatis diatur per sekolah'}</strong>
                   </span>
                 </div>
 

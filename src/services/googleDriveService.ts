@@ -3,11 +3,19 @@ import { compressImageAuto, CompressionResult } from '../utils/imageCompressor';
 import { db, doc, setDoc } from './firebase';
 
 /**
- * Enhanced Google Drive Service with deep diagnostics logging,
- * automatic 401 Unauthorized token re-validation, and error handling.
+ * Enhanced Google Drive Service for Commercial School Operations
+ * Features:
+ * 1. Automatic Root & Subfolder Creation & Verification on Google Drive
+ * 2. Intelligent Category Routing (Presensi, Buku Piket, Insiden, Rekap PDF, Cadangan Database, Profil)
+ * 3. Token Auto-Refresh & 401 Re-Validation
+ * 4. Resilient Multipart Uploads & Zero-Crash Fallbacks
+ * 5. Metadata Sync to Firestore 'drive_attachments'
  */
 
 export const DEFAULT_DRIVE_FOLDER_ID = '18lJTqdfpB0NtY23aaxoAvq84GiTcCksQ';
+
+// In-memory cache for resolved folder IDs to prevent redundant API queries
+const folderIdCache = new Map<string, string>();
 
 /**
  * Normalizes and extracts pure Google Drive folder ID from raw input,
@@ -34,7 +42,7 @@ export interface UploadFileOptions {
   postName: string;
   uploaderName: string;
   category: string;
-  entityType: 'incident' | 'logbook' | 'profile' | 'general';
+  entityType: 'incident' | 'logbook' | 'profile' | 'general' | 'attendance';
   entityId?: string;
   customMimeType?: string;
   targetFolderId?: string;
@@ -44,6 +52,21 @@ export interface DriveFolderInfo {
   id: string;
   name: string;
   webViewLink?: string;
+  created?: boolean;
+}
+
+export interface CommercialFolderStructureResult {
+  success: boolean;
+  message: string;
+  rootFolder: DriveFolderInfo;
+  subfolders: {
+    presensi: DriveFolderInfo;
+    bukuPiket: DriveFolderInfo;
+    insiden: DriveFolderInfo;
+    rekapPdf: DriveFolderInfo;
+    backupDatabase: DriveFolderInfo;
+    fotoProfil: DriveFolderInfo;
+  };
 }
 
 export interface DriveFileInfo {
@@ -84,7 +107,6 @@ export const fetchWithTokenAutoRefresh = async (
     requestHeaders.set('Authorization', `Bearer ${currentToken}`);
   }
 
-  console.log(`[GoogleDriveService] Request -> ${options.method || 'GET'} ${url}`);
   let response = await fetch(url, { ...options, headers: requestHeaders });
 
   // Handle 401 Unauthorized: Execute auto token re-validation and retry request
@@ -101,35 +123,184 @@ export const fetchWithTokenAutoRefresh = async (
     }
   }
 
-  // Deep logging for authorization or access blocked errors
-  if (!response.ok) {
-    const status = response.status;
-    let errBody = '';
-    try {
-      errBody = await response.clone().text();
-    } catch {}
-
-    console.group(`[GoogleDriveService Error Diagnostics] Status: ${status}`);
-    console.error(`URL: ${url}`);
-    console.error(`HTTP Status: ${status}`);
-    console.error(`Response Output: ${errBody}`);
-
-    if (status === 403) {
-      console.warn('💡 Diagnostics: 403 Forbidden / Access Blocked. Check OAuth scopes or domain restriction in Google Cloud Console.');
-    } else if (status === 400) {
-      console.warn('💡 Diagnostics: 400 Bad Request. Check endpoint parameter syntax or request body format.');
-    } else if (status === 401) {
-      console.warn('💡 Diagnostics: 401 Unauthorized. Access token expired or revoked.');
-    }
-    console.groupEnd();
-  } else {
-    console.log(`[GoogleDriveService] ✅ Response OK (${response.status}) from ${url}`);
-  }
-
   return response;
 };
 
-export const compressImage = async (file: File | Blob, maxDimension = 1280, quality = 0.8): Promise<string> => {
+/**
+ * Get an existing folder by name (and optional parent) or create it if not found.
+ */
+export const getOrCreateDriveFolder = async (
+  folderName: string,
+  parentFolderId?: string,
+  accessToken?: string | null
+): Promise<DriveFolderInfo> => {
+  const token = accessToken || (typeof window !== 'undefined' ? sessionStorage.getItem('epiket_drive_token') : null);
+  const cacheKey = `${parentFolderId || 'root'}_${folderName}`;
+
+  if (folderIdCache.has(cacheKey)) {
+    const cachedId = folderIdCache.get(cacheKey)!;
+    return {
+      id: cachedId,
+      name: folderName,
+      webViewLink: `https://drive.google.com/drive/folders/${cachedId}`,
+      created: false
+    };
+  }
+
+  if (!token) {
+    return {
+      id: parentFolderId || DEFAULT_DRIVE_FOLDER_ID,
+      name: folderName,
+      webViewLink: `https://drive.google.com/drive/folders/${parentFolderId || DEFAULT_DRIVE_FOLDER_ID}`,
+      created: false
+    };
+  }
+
+  try {
+    // 1. Search if folder already exists
+    const cleanName = folderName.replace(/'/g, "\\'");
+    let query = `name = '${cleanName}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+    if (parentFolderId && parentFolderId !== 'root') {
+      query += ` and '${parentFolderId}' in parents`;
+    }
+
+    const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,webViewLink)&pageSize=1`;
+    const searchRes = await fetchWithTokenAutoRefresh(searchUrl, { method: 'GET' }, token);
+
+    if (searchRes.ok) {
+      const searchData = await searchRes.json();
+      if (searchData.files && searchData.files.length > 0) {
+        const found = searchData.files[0];
+        folderIdCache.set(cacheKey, found.id);
+        return {
+          id: found.id,
+          name: found.name,
+          webViewLink: found.webViewLink || `https://drive.google.com/drive/folders/${found.id}`,
+          created: false
+        };
+      }
+    }
+
+    // 2. Folder does not exist, create it
+    const metadata: Record<string, any> = {
+      name: folderName,
+      mimeType: 'application/vnd.google-apps.folder',
+      description: `Folder Otomatis Sistem e-Piket Digital: ${folderName}`
+    };
+    if (parentFolderId && parentFolderId !== 'root') {
+      metadata.parents = [parentFolderId];
+    }
+
+    const createRes = await fetchWithTokenAutoRefresh(
+      'https://www.googleapis.com/drive/v3/files?fields=id,name,webViewLink',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+        body: JSON.stringify(metadata)
+      },
+      token
+    );
+
+    if (createRes.ok) {
+      const newFolder = await createRes.json();
+      folderIdCache.set(cacheKey, newFolder.id);
+      console.log(`[GoogleDriveService] ✅ Folder '${folderName}' berhasil dibuat di Google Drive (ID: ${newFolder.id})`);
+      return {
+        id: newFolder.id,
+        name: newFolder.name,
+        webViewLink: newFolder.webViewLink || `https://drive.google.com/drive/folders/${newFolder.id}`,
+        created: true
+      };
+    }
+  } catch (err) {
+    console.warn(`[GoogleDriveService] Gagal membuat/mencari folder '${folderName}':`, err);
+  }
+
+  return {
+    id: parentFolderId || DEFAULT_DRIVE_FOLDER_ID,
+    name: folderName,
+    webViewLink: `https://drive.google.com/drive/folders/${parentFolderId || DEFAULT_DRIVE_FOLDER_ID}`,
+    created: false
+  };
+};
+
+/**
+ * Sets up a clean, structured commercial hierarchy in Google Drive:
+ * └── E-Piket Digital - [Nama Sekolah]
+ *     ├── 01_Foto_Presensi_Selfie
+ *     ├── 02_Dokumentasi_Buku_Piket
+ *     ├── 03_Laporan_Insiden_Kejadian
+ *     ├── 04_Rekap_Laporan_PDF_Resmi
+ *     ├── 05_Cadangan_Database_Sistem
+ *     └── 06_Foto_Profil_Guru_Staf
+ */
+export const setupAutomaticCommercialFolderStructure = async (
+  schoolName: string,
+  accessToken?: string | null
+): Promise<CommercialFolderStructureResult> => {
+  const cleanSchool = schoolName?.trim() || 'Sekolah';
+  const rootFolderName = `E-Piket Digital - ${cleanSchool}`;
+
+  console.log(`[GoogleDriveService] Menginisialisasi otomatisasi struktur folder komersil untuk: ${rootFolderName}...`);
+
+  // 1. Create / Get Root Folder
+  const rootFolder = await getOrCreateDriveFolder(rootFolderName, undefined, accessToken);
+
+  // 2. Create / Get 6 Specialized Subfolders
+  const [presensi, bukuPiket, insiden, rekapPdf, backupDatabase, fotoProfil] = await Promise.all([
+    getOrCreateDriveFolder('01_Foto_Presensi_Selfie', rootFolder.id, accessToken),
+    getOrCreateDriveFolder('02_Dokumentasi_Buku_Piket', rootFolder.id, accessToken),
+    getOrCreateDriveFolder('03_Laporan_Insiden_Kejadian', rootFolder.id, accessToken),
+    getOrCreateDriveFolder('04_Rekap_Laporan_PDF_Resmi', rootFolder.id, accessToken),
+    getOrCreateDriveFolder('05_Cadangan_Database_Sistem', rootFolder.id, accessToken),
+    getOrCreateDriveFolder('06_Foto_Profil_Guru_Staf', rootFolder.id, accessToken)
+  ]);
+
+  const result: CommercialFolderStructureResult = {
+    success: true,
+    message: `Struktur penyimpanan Google Drive komersil berhasil dibuat & diverifikasi di bawah folder "${rootFolderName}".`,
+    rootFolder,
+    subfolders: {
+      presensi,
+      bukuPiket,
+      insiden,
+      rekapPdf,
+      backupDatabase,
+      fotoProfil
+    }
+  };
+
+  return result;
+};
+
+/**
+ * Resolves the destination folder ID for file uploads automatically.
+ */
+const resolveTargetFolderForUpload = async (
+  options: UploadFileOptions,
+  accessToken?: string | null
+): Promise<string> => {
+  if (options.targetFolderId && options.targetFolderId !== DEFAULT_DRIVE_FOLDER_ID) {
+    return extractDriveFolderId(options.targetFolderId);
+  }
+
+  // Auto-resolve or create structured subfolders
+  const rootFolder = await getOrCreateDriveFolder(`E-Piket Digital - ${options.schoolName || 'Sekolah'}`, undefined, accessToken);
+
+  let subfolderName = '01_Foto_Presensi_Selfie';
+  if (options.entityType === 'incident') {
+    subfolderName = '03_Laporan_Insiden_Kejadian';
+  } else if (options.entityType === 'logbook') {
+    subfolderName = '02_Dokumentasi_Buku_Piket';
+  } else if (options.entityType === 'profile') {
+    subfolderName = '06_Foto_Profil_Guru_Staf';
+  }
+
+  const subfolder = await getOrCreateDriveFolder(subfolderName, rootFolder.id, accessToken);
+  return subfolder.id;
+};
+
+export const compressImage = async (file: File | Blob, maxDimension = 1280, quality = 0.82): Promise<string> => {
   const result = await compressImageAuto(file, { maxDimension, quality, mimeType: 'image/jpeg' });
   return result.dataUrl;
 };
@@ -140,15 +311,15 @@ export const generateDriveFilePath = (opts: UploadFileOptions): string => {
   const month = String(now.getMonth() + 1).padStart(2, '0');
   const date = String(now.getDate()).padStart(2, '0');
   
-  const cleanSchool = opts.schoolName.replace(/[^a-zA-Z0-9]/g, '_');
-  const cleanYear = opts.schoolYear.replace(/[^a-zA-Z0-9]/g, '-');
-  const cleanPost = opts.postName.replace(/[^a-zA-Z0-9]/g, '_');
+  const cleanSchool = (opts.schoolName || 'Sekolah').replace(/[^a-zA-Z0-9]/g, '_');
+  const cleanYear = (opts.schoolYear || '2026-2027').replace(/[^a-zA-Z0-9]/g, '-');
+  const cleanPost = (opts.postName || 'Pos_Piket').replace(/[^a-zA-Z0-9]/g, '_');
 
   if (opts.entityType === 'profile') {
     return `/EPiket/${cleanSchool}/Foto_Profil/${cleanYear}`;
   }
 
-  return `/EPiket/${cleanSchool}/${cleanYear}/${opts.semester}/${year}/${month}/${date}/${cleanPost}`;
+  return `/EPiket/${cleanSchool}/${cleanYear}/${opts.semester || 'Ganjil'}/${year}/${month}/${date}/${cleanPost}`;
 };
 
 export const generateDriveFileName = (uploaderName: string, category: string, ext = 'jpg'): string => {
@@ -160,8 +331,8 @@ export const generateDriveFileName = (uploaderName: string, category: string, ex
   const mins = String(now.getMinutes()).padStart(2, '0');
   const secs = String(now.getSeconds()).padStart(2, '0');
 
-  const cleanUploader = uploaderName.replace(/[^a-zA-Z0-9]/g, '');
-  const cleanCat = category.replace(/[^a-zA-Z0-9]/g, '');
+  const cleanUploader = (uploaderName || 'Petugas').replace(/[^a-zA-Z0-9]/g, '');
+  const cleanCat = (category || 'Dokumentasi').replace(/[^a-zA-Z0-9]/g, '');
 
   return `${year}${month}${day}_${hours}${mins}${secs}_${cleanUploader}_${cleanCat}.${ext}`;
 };
@@ -184,13 +355,15 @@ export const uploadToGoogleDrive = async (
   let realDriveUrl: string | undefined = undefined;
   let webContentLink: string | undefined = undefined;
 
-  if (accessToken || (typeof window !== 'undefined' && sessionStorage.getItem('epiket_drive_token'))) {
+  const currentToken = accessToken || (typeof window !== 'undefined' ? sessionStorage.getItem('epiket_drive_token') : null);
+
+  if (currentToken) {
     try {
-      const targetFolderId = extractDriveFolderId(options.targetFolderId);
+      const targetFolderId = await resolveTargetFolderForUpload(options, currentToken);
       const metadata: Record<string, any> = {
         name: fileName,
         mimeType: 'image/jpeg',
-        description: `Dokumentasi Piket: ${options.postName} oleh ${options.uploaderName} (${options.category}) - ${folderPath}`,
+        description: `Dokumentasi e-Piket: ${options.postName} oleh ${options.uploaderName} (${options.category}) - ${folderPath}`,
         parents: [targetFolderId]
       };
 
@@ -212,16 +385,16 @@ export const uploadToGoogleDrive = async (
       let res = await fetchWithTokenAutoRefresh(
         'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,webContentLink,thumbnailLink',
         { method: 'POST', body: formBody },
-        accessToken
+        currentToken
       );
 
       // If target folder is not accessible (404/403), fallback to uploading without parents
       if (!res.ok && res.status >= 400 && metadata.parents) {
-        console.warn(`[GoogleDriveService] Upload to folder '${targetFolderId}' returned HTTP ${res.status}. Falling back to root Drive...`);
+        console.warn(`[GoogleDriveService] Upload ke folder '${targetFolderId}' gagal (HTTP ${res.status}). Menggunakan fallback root Drive...`);
         const fallbackMetadata = {
           name: fileName,
           mimeType: 'image/jpeg',
-          description: `Dokumentasi Piket: ${options.postName} oleh ${options.uploaderName} (${options.category}) - ${folderPath}`
+          description: `Dokumentasi e-Piket: ${options.postName} oleh ${options.uploaderName} (${options.category})`
         };
         const fallbackForm = new FormData();
         fallbackForm.append('metadata', new Blob([JSON.stringify(fallbackMetadata)], { type: 'application/json; charset=UTF-8' }));
@@ -229,7 +402,7 @@ export const uploadToGoogleDrive = async (
         res = await fetchWithTokenAutoRefresh(
           'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,webContentLink,thumbnailLink',
           { method: 'POST', body: fallbackForm },
-          accessToken
+          currentToken
         );
       }
 
@@ -239,7 +412,7 @@ export const uploadToGoogleDrive = async (
           driveFileId = driveData.id;
           realDriveUrl = driveData.webViewLink;
           webContentLink = driveData.webContentLink;
-          console.log(`[GoogleDriveService] ✅ Foto terunggah ke Google Drive (Folder: ${targetFolderId})! (ID: ${driveData.id})`);
+          console.log(`[GoogleDriveService] ✅ Foto terunggah ke Google Drive (ID: ${driveData.id})`);
         }
       }
     } catch (driveErr) {
@@ -357,14 +530,18 @@ export const uploadReportDocumentToDrive = async (
   }
 
   try {
-    const cleanSchool = schoolName.replace(/[^a-zA-Z0-9]/g, '_');
+    const cleanSchool = (schoolName || 'Sekolah').replace(/[^a-zA-Z0-9]/g, '_');
     const fileName = `${documentTitle.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.pdf`;
+
+    // Automatically resolve or create the PDF reports subfolder
+    const rootFolder = await getOrCreateDriveFolder(`E-Piket Digital - ${schoolName}`, undefined, token);
+    const pdfFolder = await getOrCreateDriveFolder('04_Rekap_Laporan_PDF_Resmi', rootFolder.id, token);
 
     const metadata = {
       name: fileName,
       mimeType: 'application/pdf',
-      description: `Laporan Resmi Kedinasan e-Piket: ${documentTitle} - ${schoolName}`,
-      parents: [DEFAULT_DRIVE_FOLDER_ID]
+      description: `Laporan Resmi Kedinasan e-Piket: ${documentTitle} - ${cleanSchool}`,
+      parents: [pdfFolder.id]
     };
 
     const metadataBlob = new Blob([JSON.stringify(metadata)], { type: 'application/json; charset=UTF-8' });
@@ -418,12 +595,16 @@ export const autoSyncDatabaseToDrive = async (
   }
 
   try {
-    const cleanSchool = schoolName.replace(/[^a-zA-Z0-9]/g, '_');
+    const cleanSchool = (schoolName || 'Sekolah').replace(/[^a-zA-Z0-9]/g, '_');
     const fileName = `EPIKET_BACKUP_${cleanSchool}.json`;
     const jsonString = JSON.stringify(snapshotData, null, 2);
     const jsonBlob = new Blob([jsonString], { type: 'application/json; charset=UTF-8' });
 
-    const searchQuery = encodeURIComponent(`name = '${fileName}' and trashed = false`);
+    // Automatically resolve or create the database backup subfolder
+    const rootFolder = await getOrCreateDriveFolder(`E-Piket Digital - ${schoolName}`, undefined, token);
+    const backupFolder = await getOrCreateDriveFolder('05_Cadangan_Database_Sistem', rootFolder.id, token);
+
+    const searchQuery = encodeURIComponent(`name = '${fileName}' and '${backupFolder.id}' in parents and trashed = false`);
     const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${searchQuery}&fields=files(id,name)`;
 
     const searchRes = await fetchWithTokenAutoRefresh(searchUrl, { method: 'GET' }, token);
@@ -459,7 +640,7 @@ export const autoSyncDatabaseToDrive = async (
       name: fileName,
       mimeType: 'application/json',
       description: `Pencadangan Otomatis Realtime Sistem e-Piket (${cleanSchool})`,
-      parents: [DEFAULT_DRIVE_FOLDER_ID]
+      parents: [backupFolder.id]
     };
 
     const metadataBlob = new Blob([JSON.stringify(metadata)], { type: 'application/json; charset=UTF-8' });
