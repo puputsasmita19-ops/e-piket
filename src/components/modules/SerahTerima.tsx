@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowRightLeft, Plus, CheckCircle2, Clock, MapPin, Bell, Volume2, Send } from 'lucide-react';
+import { ArrowRightLeft, Plus, CheckCircle2, Clock, MapPin, Bell, Volume2, Send, Pencil, Trash2, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { Handover } from '../../types';
@@ -11,9 +11,10 @@ import { showSuccessToast } from '../../utils/toast';
 
 export const SerahTerima: React.FC = () => {
   const { currentUser } = useAuth();
-  const { posts, users, handovers, createHandover, acknowledgeHandover } = useData();
+  const { posts, users, handovers, createHandover, updateHandover, deleteHandover, acknowledgeHandover } = useData();
 
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingHandover, setEditingHandover] = useState<Handover | null>(null);
   const [selectedHandoverAck, setSelectedHandoverAck] = useState<Handover | null>(null);
   const [ackNotes, setAckNotes] = useState('');
 
@@ -312,7 +313,7 @@ export const SerahTerima: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3 shrink-0">
+                  <div className="flex items-center gap-2 shrink-0">
                     <span className="text-xs text-slate-400 dark:text-slate-500 font-mono">
                       {formatDateIndo(h.tanggal)} • {h.waktu} WIB
                     </span>
@@ -326,6 +327,30 @@ export const SerahTerima: React.FC = () => {
                         Menunggu Konfirmasi
                       </span>
                     )}
+
+                    <div className="flex items-center gap-1 pl-1 border-l border-slate-200 dark:border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => setEditingHandover(h)}
+                        className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                        title="Edit Serah Terima"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (confirm(`Apakah Anda yakin ingin menghapus catatan serah terima di ${h.postName}?`)) {
+                            await deleteHandover(h.id);
+                            showSuccessToast('Serah terima berhasil dihapus.');
+                          }
+                        }}
+                        className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                        title="Hapus Serah Terima"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -516,6 +541,92 @@ export const SerahTerima: React.FC = () => {
                   type="button"
                   onClick={() => setShowCreateModal(false)}
                   className="px-4 py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl text-xs cursor-pointer"
+                >
+                  Batal
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT HANDOVER MODAL */}
+      {editingHandover && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-lg w-full p-6 space-y-4 border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">Edit Catatan Serah Terima</h3>
+              <button
+                onClick={() => setEditingHandover(null)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!editingHandover) return;
+                await updateHandover(editingHandover.id, {
+                  kondisiPos: editingHandover.kondisiPos,
+                  tindakLanjutPending: editingHandover.tindakLanjutPending,
+                  siswaPerhatian: editingHandover.siswaPerhatian,
+                  catatanTambahan: editingHandover.catatanTambahan
+                });
+                setEditingHandover(null);
+                showSuccessToast('Data serah terima berhasil diperbarui.');
+              }}
+              className="space-y-3"
+            >
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-700 dark:text-slate-300 mb-1">
+                  Kondisi Pos
+                </label>
+                <textarea
+                  required
+                  rows={2}
+                  value={editingHandover.kondisiPos}
+                  onChange={(e) => setEditingHandover({ ...editingHandover, kondisiPos: e.target.value })}
+                  className="w-full text-xs p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-700 dark:text-slate-300 mb-1">
+                  Siswa yang Perlu Perhatian
+                </label>
+                <input
+                  type="text"
+                  value={editingHandover.siswaPerhatian || ''}
+                  onChange={(e) => setEditingHandover({ ...editingHandover, siswaPerhatian: e.target.value })}
+                  className="w-full text-xs p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-700 dark:text-slate-300 mb-1">
+                  Tugas Pending
+                </label>
+                <input
+                  type="text"
+                  value={editingHandover.tindakLanjutPending || ''}
+                  onChange={(e) => setEditingHandover({ ...editingHandover, tindakLanjutPending: e.target.value })}
+                  className="w-full text-xs p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-md transition cursor-pointer"
+                >
+                  Simpan Perubahan
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingHandover(null)}
+                  className="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl text-xs cursor-pointer"
                 >
                   Batal
                 </button>

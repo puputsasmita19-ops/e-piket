@@ -139,8 +139,12 @@ const requestGsiOAuthToken = (clientId: string, promptMode: 'consent' | '' = 'co
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [usersList, setUsersList] = useState<User[]>(() => {
-    const saved = localStorage.getItem('epiket_users_list');
-    return saved ? JSON.parse(saved) : INITIAL_USERS;
+    try {
+      const saved = localStorage.getItem('epiket_users_list');
+      return saved ? JSON.parse(saved) : INITIAL_USERS;
+    } catch (e) {
+      return INITIAL_USERS;
+    }
   });
 
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -158,10 +162,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // 2. Lookup by ID in persisted usersList or INITIAL_USERS
     const savedUserId = localStorage.getItem(AUTH_STORAGE_KEY);
     if (savedUserId) {
-      const savedList = localStorage.getItem('epiket_users_list');
-      const list: User[] = savedList ? JSON.parse(savedList) : INITIAL_USERS;
-      const found = list.find((u) => u.id === savedUserId) || INITIAL_USERS.find((u) => u.id === savedUserId);
-      if (found) return found;
+      try {
+        const savedList = localStorage.getItem('epiket_users_list');
+        const list: User[] = savedList ? JSON.parse(savedList) : INITIAL_USERS;
+        const found = list.find((u) => u.id === savedUserId) || INITIAL_USERS.find((u) => u.id === savedUserId);
+        if (found) return found;
+      } catch (e) {}
     }
     // Always land on Login Page by default on new deployments or unauthenticated sessions
     return null;

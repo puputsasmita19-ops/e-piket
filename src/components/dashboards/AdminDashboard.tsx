@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Users, MapPin, Clock, AlertTriangle, BookOpen, CheckCircle2, XCircle, Calendar, Plus, FileText, HardDrive, Zap, ArrowRight, TrendingUp, ShieldCheck, Phone, MessageSquare, ArrowRightLeft, BellRing, AlertCircle, ShieldAlert } from 'lucide-react';
+import { Users, MapPin, Clock, AlertTriangle, BookOpen, CheckCircle2, XCircle, Calendar, Plus, FileText, HardDrive, Zap, ArrowRight, TrendingUp, ShieldCheck, Phone, MessageSquare, ArrowRightLeft, BellRing, AlertCircle, ShieldAlert, UserCog, Battery, X, Check, Pencil } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { getTodayDateString, getDayNameIndo } from '../../services/seedData';
 import { formatDateIndo, formatTimeIndo } from '../../utils/formatters';
@@ -12,6 +12,8 @@ import { PiketInstanWidget } from '../common/PiketInstanWidget';
 import { PetaLokasiMap } from '../common/PetaLokasiMap';
 import { PiketReminderNotification } from '../common/PiketReminderNotification';
 import { AdminPanicModeModal } from '../modals/AdminPanicModeModal';
+import { DutySchedule } from '../../types';
+import { showSuccessToast } from '../../utils/toast';
 
 interface AdminDashboardProps {
   setActiveTab: (tab: string) => void;
@@ -19,59 +21,78 @@ interface AdminDashboardProps {
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, onOpenAISummary }) => {
-  const { school, users, posts, schedules, attendances, incidents, logbooks, auditLogs, sendCustomWhatsApp } = useData();
+  const { school, users, posts, schedules, attendances, incidents, logbooks, auditLogs, adminManualCheckIn, createReplacement } = useData();
   const [showPanicModal, setShowPanicModal] = useState<boolean>(false);
+
+  // Admin Manual Override State (Requirement 6)
+  const [overrideSchedule, setOverrideSchedule] = useState<DutySchedule | null>(null);
+  const [overrideStatus, setOverrideStatus] = useState<'sedang_bertugas' | 'terlambat' | 'sakit' | 'izin' | 'lowbat_tunggu'>('sedang_bertugas');
+  const [overrideNotes, setOverrideNotes] = useState<string>('');
+  const [overrideSubmitting, setOverrideSubmitting] = useState<boolean>(false);
+
+  // Dashboard Quick Replacement State (Requirement 5)
+  const [replacementSchedule, setReplacementSchedule] = useState<DutySchedule | null>(null);
+  const [replacementUserId, setReplacementUserId] = useState<string>('');
+  const [replacementReason, setReplacementReason] = useState<string>('');
+  const [replacementSubmitting, setReplacementSubmitting] = useState<boolean>(false);
 
   const today = getTodayDateString();
   const dayName = getDayNameIndo(today);
   const todaySchedules = schedules.filter((s) => s.tanggal === today);
 
-  const now = new Date();
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-  const tolerance = school.toleransiKeterlambatanMenit || 15;
-
-  // Real-time Late Check-in calculation: scheduled teachers who have not checked in past their start time
-  const lateCheckInList = todaySchedules
-    .filter((s) => {
-      if (s.status === 'sedang_bertugas' || s.status === 'sudah_checkout') return false;
-      if (!s.jamMulai) return false;
-      const [h, m] = s.jamMulai.split(':').map(Number);
-      const startMin = h * 60 + m;
-      return currentMinutes > startMin;
-    })
-    .map((s) => {
-      const [h, m] = s.jamMulai!.split(':').map(Number);
-      const startMin = h * 60 + m;
-      const minutesLate = currentMinutes - startMin;
-      const user = users.find((u) => u.id === s.userId);
-      return {
-        ...s,
-        minutesLate,
-        userPhone: user?.nomorHP,
-        userPhoto: user?.foto,
-        userNip: user?.nip
-      };
-    });
-
   const totalGuru = users.filter((u) => u.role === 'guru').length;
   const totalTendik = users.filter((u) => u.role === 'tendik').length;
   const petugasAktif = todaySchedules.filter((s) => s.status === 'sedang_bertugas').length;
   const belumCheckin = todaySchedules.filter((s) => s.status === 'belum_checkin' || s.status === 'belum_piket').length;
-  const terlambat = todaySchedules.filter((s) => s.status === 'terlambat').length;
   const kejadianHariIni = incidents.filter((i) => i.tanggal === today);
   const urgentIncidents = incidents.filter((i) => i.pentingKepalaSekolah || i.prioritas === 'darurat' || i.prioritas === 'tinggi');
 
-  const handleSendWhatsAppReminder = (teacherName: string, postName: string, phone?: string, jamMulai?: string) => {
-    if (!phone) {
-      alert(`Nomor telepon untuk ${teacherName} belum terdaftar.`);
-      return;
+  const handleAdminOverrideSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!overrideSchedule) return;
+    setOverrideSubmitting(true);
+    try {
+      const res = await adminManualCheckIn(overrideSchedule.id, overrideStatus, overrideNotes);
+      showSuccessToast(res.message);
+      setOverrideSchedule(null);
+      setOverrideNotes('');
+    } catch (e: any) {
+      alert('Gagal memproses presensi manual admin.');
+    } finally {
+      setOverrideSubmitting(false);
     }
-    const cleanPhone = phone.replace(/[^0-9]/g, '');
-    const formattedPhone = cleanPhone.startsWith('0') ? '62' + cleanPhone.slice(1) : cleanPhone;
-    const msgText = encodeURIComponent(
-      `Halo Bpk/Ibu ${teacherName}, kami menginformasikan bahwa Anda terjadwal piket di ${postName} hari ini mulai pukul ${jamMulai} WIB dan saat ini tercatat belum melakukan check-in di aplikasi e-Piket Digital. Mohon segera menuju pos dan melakukan check-in presensi selfie. Terima kasih.`
-    );
-    window.open(`https://wa.me/${formattedPhone}?text=${msgText}`, '_blank');
+  };
+
+  const handleQuickReplacementSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!replacementSchedule || !replacementUserId) return;
+    setReplacementSubmitting(true);
+    try {
+      const repUser = users.find((u) => u.id === replacementUserId);
+      if (repUser) {
+        await createReplacement({
+          scheduleId: replacementSchedule.id,
+          tanggal: replacementSchedule.tanggal,
+          postId: replacementSchedule.postId,
+          postName: replacementSchedule.postName || 'Pos Piket',
+          originalUserId: replacementSchedule.userId,
+          originalUserName: replacementSchedule.userName || 'Petugas Asli',
+          replacementUserId: repUser.id,
+          replacementUserName: repUser.nama,
+          alasan: replacementReason || 'Tugas dinas luar / Izin berhalangan',
+          assignedByUserId: 'admin-1',
+          assignedByUserName: 'Administrator'
+        });
+        showSuccessToast(`Guru pengganti (${repUser.nama}) berhasil ditugaskan!`);
+        setReplacementSchedule(null);
+        setReplacementUserId('');
+        setReplacementReason('');
+      }
+    } catch (e: any) {
+      alert('Gagal memproses penggantian tugas.');
+    } finally {
+      setReplacementSubmitting(false);
+    }
   };
 
   return (
@@ -193,12 +214,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, on
                             )}
                             {(sch.status === 'belum_checkin' || sch.status === 'belum_piket') && (
                               <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
-                                Belum Hadir
+                                {sch.notes?.includes('LOW-BAT') ? '⏳ Status Tunggu (Low-Bat)' : 'Belum Hadir'}
                               </span>
                             )}
                             {sch.status === 'sudah_checkout' && (
                               <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300">
                                 Selesai
+                              </span>
+                            )}
+                            {sch.status === 'dibatalkan' && (
+                              <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-300">
+                                {sch.notes?.includes('SAKIT') ? '😷 Sakit' : sch.notes?.includes('IZIN') ? '✉️ Izin' : 'Dibatalkan'}
                               </span>
                             )}
                           </div>
@@ -213,8 +239,142 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, on
         </div>
       </div>
 
-      {/* REAL-TIME INTERACTIVE LEAFLET GEOFENCE MAP */}
+      {/* REAL-TIME INTERACTIVE LEAFLET GEOFENCE MAP (MOVED BELOW MONITORING REAL-TIME) */}
       <PetaLokasiMap />
+
+      {/* JADWAL REALTIME PIKET HARI INI & FITUR PRESENSI ADMIN / PENGGANTIAN (REQUIREMENTS 4, 5, 6) */}
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 sm:p-6 transition-colors space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+          <div>
+            <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+              <span>Jadwal Realtime Piket Hari Ini ({todaySchedules.length} Petugas)</span>
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Monitoring jadwal guru piket hari ini. Admin dapat memperbarui status presensi (Sakit/Izin/HP Low-Bat) atau menugaskan pengganti secara langsung.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('penggantian')}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-sm transition active:scale-95 cursor-pointer self-start sm:self-auto"
+          >
+            <UserCog className="w-4 h-4" />
+            <span>Kelola Penggantian Tugas</span>
+          </button>
+        </div>
+
+        {todaySchedules.length === 0 ? (
+          <div className="p-8 text-center text-slate-400 dark:text-slate-500 text-xs">
+            Tidak ada jadwal piket reguler untuk hari ini ({dayName}, {formatDateIndo(today)}).
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-bold uppercase text-[10px]">
+                  <th className="py-2.5 px-3">Petugas Piket</th>
+                  <th className="py-2.5 px-3">Pos &amp; Shift</th>
+                  <th className="py-2.5 px-3">Jam Tugas</th>
+                  <th className="py-2.5 px-3">Status Live</th>
+                  <th className="py-2.5 px-3 text-right">Aksi Admin</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {todaySchedules.map((sch) => {
+                  const att = attendances.find((a) => a.scheduleId === sch.id);
+                  return (
+                    <tr key={sch.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition">
+                      <td className="py-3 px-3">
+                        <div className="font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
+                          <span>{sch.userName}</span>
+                          {sch.isReplacement && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                              Pengganti
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10.5px] text-slate-500 dark:text-slate-400">{(sch.userRole || 'guru').toUpperCase()}</p>
+                      </td>
+                      <td className="py-3 px-3 font-medium text-slate-800 dark:text-slate-200">
+                        {sch.postName}
+                        <span className="block text-[10.5px] text-slate-500 dark:text-slate-400">{sch.shiftName}</span>
+                      </td>
+                      <td className="py-3 px-3 font-mono font-bold text-slate-700 dark:text-slate-300">
+                        {sch.jamMulai} - {sch.jamSelesai} WIB
+                      </td>
+                      <td className="py-3 px-3">
+                        {sch.status === 'sedang_bertugas' && (
+                          <span className="inline-flex items-center gap-1 text-[10.5px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                            Hadir ({att?.checkInAt ? formatTimeIndo(att.checkInAt).split(' ')[0] : 'Aktif'})
+                          </span>
+                        )}
+                        {sch.status === 'terlambat' && (
+                          <span className="text-[10.5px] font-extrabold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300">
+                            Terlambat
+                          </span>
+                        )}
+                        {(sch.status === 'belum_checkin' || sch.status === 'belum_piket') && (
+                          <span className="text-[10.5px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                            {sch.notes?.includes('LOW-BAT') ? '⏳ Status Tunggu (Low-Bat)' : 'Belum Hadir'}
+                          </span>
+                        )}
+                        {sch.status === 'sudah_checkout' && (
+                          <span className="text-[10.5px] font-extrabold px-2.5 py-0.5 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300">
+                            Selesai
+                          </span>
+                        )}
+                        {sch.status === 'dibatalkan' && (
+                          <span className="text-[10.5px] font-extrabold px-2.5 py-0.5 rounded-full bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-300">
+                            {sch.notes?.includes('SAKIT') ? '😷 Sakit' : sch.notes?.includes('IZIN') ? '✉️ Izin' : 'Dibatalkan'}
+                          </span>
+                        )}
+                        {sch.notes && (
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400 italic truncate max-w-xs mt-0.5">
+                            {sch.notes}
+                          </p>
+                        )}
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOverrideSchedule(sch);
+                              setOverrideNotes(sch.notes || '');
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:hover:bg-emerald-900/80 dark:text-emerald-300 font-extrabold text-[11px] border border-emerald-200 dark:border-emerald-800 transition cursor-pointer flex items-center gap-1"
+                            title="Presensi Manual Admin / Ubah Status (Low-Bat/Sakit/Izin)"
+                          >
+                            <Pencil className="w-3 h-3" />
+                            <span>Presensi Admin</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setReplacementSchedule(sch);
+                              setReplacementUserId('');
+                              setReplacementReason('');
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-700 dark:bg-teal-950/80 dark:hover:bg-teal-900/80 dark:text-teal-300 font-extrabold text-[11px] border border-teal-200 dark:border-teal-800 transition cursor-pointer flex items-center gap-1"
+                            title="Tugaskan Guru Pengganti"
+                          >
+                            <UserCog className="w-3 h-3" />
+                            <span>Ganti</span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       {/* KPI Stats Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -317,6 +477,163 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, on
           </button>
         </div>
       </div>
+
+      {/* ADMIN OVERRIDE PRESENSI & STATUS MODAL (REQUIREMENT 6) */}
+      {overrideSchedule && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-md w-full p-6 space-y-4 border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Pencil className="w-4 h-4 text-emerald-600" />
+                <span>Presensi / Status Override Admin</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setOverrideSchedule(null)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3.5 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700 text-xs space-y-1">
+              <p className="font-extrabold text-slate-900 dark:text-white">{overrideSchedule.userName} ({(overrideSchedule.userRole || 'guru').toUpperCase()})</p>
+              <p className="text-slate-600 dark:text-slate-300">Pos: {overrideSchedule.postName} • Shift: {overrideSchedule.shiftName}</p>
+              <p className="text-slate-500 font-mono text-[11px]">Jadwal: {overrideSchedule.jamMulai} - {overrideSchedule.jamSelesai} WIB</p>
+            </div>
+
+            <form onSubmit={handleAdminOverrideSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+                  Pilih Status Presensi
+                </label>
+                <select
+                  value={overrideStatus}
+                  onChange={(e) => setOverrideStatus(e.target.value as any)}
+                  className="w-full text-xs p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                >
+                  <option value="sedang_bertugas">🟢 Hadir (Presensi Manual Admin)</option>
+                  <option value="lowbat_tunggu">⏳ Status Tunggu (HP Low-Bat / Kendala Smartphone)</option>
+                  <option value="terlambat">⚠️ Terlambat Check-In</option>
+                  <option value="sakit">😷 Sakit (Izin Berhalangan)</option>
+                  <option value="izin">✉️ Izin (Dinas Luar / Izin)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+                  Catatan Admin <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  required
+                  rows={2}
+                  value={overrideNotes}
+                  onChange={(e) => setOverrideNotes(e.target.value)}
+                  placeholder="Contoh: Guru sudah bertugas di pos jam 06:30, HP low-battery. Presensi diverifikasi Admin."
+                  className="w-full text-xs p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="submit"
+                  disabled={overrideSubmitting}
+                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-md transition cursor-pointer"
+                >
+                  {overrideSubmitting ? 'Simpan...' : 'Simpan Status Presensi'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOverrideSchedule(null)}
+                  className="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl text-xs cursor-pointer"
+                >
+                  Batal
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* QUICK REPLACEMENT MODAL (REQUIREMENT 5) */}
+      {replacementSchedule && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-lg w-full p-6 space-y-4 border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <UserCog className="w-4 h-4 text-teal-600" />
+                <span>Tugaskan Guru Pengganti Piket</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setReplacementSchedule(null)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3.5 bg-teal-50 dark:bg-teal-950/40 rounded-2xl border border-teal-200 dark:border-teal-800 text-xs space-y-1 text-teal-950 dark:text-teal-200">
+              <p><strong>Petugas Berhalangan:</strong> {replacementSchedule.userName}</p>
+              <p><strong>Pos Piket:</strong> {replacementSchedule.postName} ({replacementSchedule.jamMulai} - {replacementSchedule.jamSelesai} WIB)</p>
+            </div>
+
+            <form onSubmit={handleQuickReplacementSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+                  Pilih Guru / Tendik Pengganti <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  required
+                  value={replacementUserId}
+                  onChange={(e) => setReplacementUserId(e.target.value)}
+                  className="w-full text-xs p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                >
+                  <option value="">-- Pilih Guru/Tendik Pengganti --</option>
+                  {users
+                    .filter((u) => u.id !== replacementSchedule.userId)
+                    .map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.nama} • {u.jabatan} ({u.role.toUpperCase()})
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+                  Alasan Penggantian <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  required
+                  rows={2}
+                  value={replacementReason}
+                  onChange={(e) => setReplacementReason(e.target.value)}
+                  placeholder="Contoh: Petugas asli berhalangan karena izin sakit / dinas luar"
+                  className="w-full text-xs p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="submit"
+                  disabled={replacementSubmitting}
+                  className="flex-1 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl text-xs shadow-md transition cursor-pointer"
+                >
+                  {replacementSubmitting ? 'Memproses...' : 'Tugaskan Pengganti'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReplacementSchedule(null)}
+                  className="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl text-xs cursor-pointer"
+                >
+                  Batal
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* ADMIN PANIC MODE & DISASTER RECOVERY MODAL */}
       <AdminPanicModeModal

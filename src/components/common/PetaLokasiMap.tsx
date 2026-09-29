@@ -176,26 +176,34 @@ export const PetaLokasiMap: React.FC<PetaLokasiMapProps> = ({
     if (!mapContainerRef.current) return;
 
     if (!mapInstanceRef.current) {
-      const map = L.map(mapContainerRef.current, {
-        center: [schoolLat, schoolLng],
-        zoom: 16,
-        zoomControl: false
-      });
+      if (mapContainerRef.current && (mapContainerRef.current as any)._leaflet_id) {
+        (mapContainerRef.current as any)._leaflet_id = null;
+      }
+      try {
+        const map = L.map(mapContainerRef.current, {
+          center: [schoolLat, schoolLng],
+          zoom: 16,
+          zoomControl: false
+        });
 
-      L.control.zoom({ position: 'topright' }).addTo(map);
+        L.control.zoom({ position: 'topright' }).addTo(map);
 
-      // Add Google Maps Tile Layer
-      const googleTile = L.tileLayer(getGoogleMapTileUrl(mapMode), {
-        attribution: '&copy; Google Maps',
-        maxZoom: 20,
-        subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
-      }).addTo(map);
+        // Add Google Maps Tile Layer
+        const googleTile = L.tileLayer(getGoogleMapTileUrl(mapMode), {
+          attribution: '&copy; Google Maps',
+          maxZoom: 20,
+          subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
+        }).addTo(map);
 
-      tileLayerRef.current = googleTile;
-      mapInstanceRef.current = map;
+        tileLayerRef.current = googleTile;
+        mapInstanceRef.current = map;
+      } catch (err) {
+        console.warn('Leaflet map creation handled safely:', err);
+      }
     }
 
     const map = mapInstanceRef.current;
+    if (!map) return;
 
     // Update School Marker
     if (schoolMarkerRef.current) {

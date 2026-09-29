@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UserCog, Plus, Calendar, Clock, UserCheck, ArrowRight, CheckCircle2, AlertCircle, FileText } from 'lucide-react';
+import { UserCog, Plus, Calendar, Clock, UserCheck, ArrowRight, CheckCircle2, AlertCircle, FileText, Pencil, Trash2, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { DutyReplacement } from '../../types';
@@ -9,9 +9,10 @@ import { showSuccessToast } from '../../utils/toast';
 
 export const PenggantianPetugas: React.FC = () => {
   const { currentUser } = useAuth();
-  const { schedules, users, replacements, createReplacement } = useData();
+  const { schedules, users, replacements, createReplacement, updateReplacement, deleteReplacement } = useData();
 
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingReplacement, setEditingReplacement] = useState<DutyReplacement | null>(null);
   const [selectedScheduleId, setSelectedScheduleId] = useState('');
   const [replacementUserId, setReplacementUserId] = useState('');
   const [alasan, setAlasan] = useState('');
@@ -108,9 +109,34 @@ export const PenggantianPetugas: React.FC = () => {
                   </div>
                 </div>
 
-                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">
-                  Ditetapkan pada: {formatDateIndo(rep.createdAt)}
-                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">
+                    Ditetapkan: {formatDateIndo(rep.createdAt)}
+                  </span>
+                  <div className="flex items-center gap-1 pl-2 border-l border-slate-200 dark:border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setEditingReplacement(rep)}
+                      className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                      title="Edit Penggantian"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (confirm(`Apakah Anda yakin ingin menghapus catatan penggantian petugas di ${rep.postName}?`)) {
+                          await deleteReplacement(rep.id);
+                          showSuccessToast('Riwayat penggantian petugas berhasil dihapus.');
+                        }
+                      }}
+                      className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                      title="Hapus Penggantian"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
               </div>
 
               {/* Transition visualization */}
@@ -137,7 +163,70 @@ export const PenggantianPetugas: React.FC = () => {
         )}
       </div>
 
-      {/* CREATE REPLACEMENT MODAL */}
+      {/* EDIT REPLACEMENT MODAL */}
+      {editingReplacement && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-lg w-full p-6 space-y-4 border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">Edit Penggantian Petugas</h3>
+              <button
+                onClick={() => setEditingReplacement(null)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!editingReplacement) return;
+                await updateReplacement(editingReplacement.id, {
+                  alasan: editingReplacement.alasan
+                });
+                setEditingReplacement(null);
+                showSuccessToast('Data penggantian petugas berhasil diperbarui.');
+              }}
+              className="space-y-4"
+            >
+              <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-2xl text-xs space-y-1">
+                <p><strong>Pos:</strong> {editingReplacement.postName} ({formatDateIndo(editingReplacement.tanggal)})</p>
+                <p><strong>Petugas Asli:</strong> {editingReplacement.originalUserName}</p>
+                <p><strong>Petugas Pengganti:</strong> {editingReplacement.replacementUserName}</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
+                  Alasan Penggantian
+                </label>
+                <textarea
+                  required
+                  rows={2}
+                  value={editingReplacement.alasan}
+                  onChange={(e) => setEditingReplacement({ ...editingReplacement, alasan: e.target.value })}
+                  className="w-full text-xs p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-md transition cursor-pointer"
+                >
+                  Simpan Perubahan
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingReplacement(null)}
+                  className="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl text-xs cursor-pointer"
+                >
+                  Batal
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 space-y-4 border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in-95">

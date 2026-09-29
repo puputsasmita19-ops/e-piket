@@ -18,7 +18,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isHid
       case 'admin':
         return [
           { group: 'Utama', items: [
-            { id: 'login', label: 'Login Admin', icon: LayoutDashboard }
+            { id: 'login', label: 'Dashboard', icon: LayoutDashboard }
           ]},
           { group: 'Piket & Transaksi', items: [
             { id: 'buku-piket', label: 'Buku Piket Digital', icon: BookOpen },
@@ -41,7 +41,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isHid
       case 'kepsek':
         return [
           { group: 'Monitoring Pimpinan', items: [
-            { id: 'login', label: 'Login Monitoring', icon: LayoutDashboard },
+            { id: 'login', label: 'Dashboard Pimpinan', icon: LayoutDashboard },
             { id: 'buku-piket', label: 'Buku Piket Digital', icon: BookOpen },
             { id: 'kejadian', label: 'Kejadian & Ketertiban', icon: AlertTriangle },
             { id: 'serah-terima', label: 'Monitoring Serah Terima', icon: ArrowRightLeft }
@@ -61,7 +61,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isHid
       default:
         return [
           { group: 'Tugas Piket', items: [
-            { id: 'login', label: 'Login', icon: LayoutDashboard },
+            { id: 'login', label: 'Dashboard', icon: LayoutDashboard },
             { id: 'piket-saya', label: 'Piket Saya (Check-in)', icon: CalendarCheck },
             { id: 'jadwal', label: 'Jadwal Piket', icon: Calendar }
           ]},

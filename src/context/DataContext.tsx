@@ -121,8 +121,17 @@ interface DataContextType {
   updateIncident: (id: string, data: Partial<Incident>) => Promise<void>;
   deleteIncident: (id: string) => Promise<void>;
   createHandover: (handover: Omit<Handover, 'id' | 'createdAt'>) => Promise<Handover>;
+  updateHandover: (id: string, data: Partial<Handover>) => Promise<void>;
+  deleteHandover: (id: string) => Promise<void>;
   acknowledgeHandover: (handoverId: string, notes?: string) => Promise<void>;
   createReplacement: (rep: Omit<DutyReplacement, 'id' | 'createdAt'>) => Promise<void>;
+  updateReplacement: (id: string, data: Partial<DutyReplacement>) => Promise<void>;
+  deleteReplacement: (id: string) => Promise<void>;
+  adminManualCheckIn: (
+    scheduleId: string,
+    status: 'sedang_bertugas' | 'terlambat' | 'sakit' | 'izin' | 'lowbat_tunggu',
+    notes: string
+  ) => Promise<{ success: boolean; message: string }>;
   
   // Schedules CRUD
   createSchedule: (schedule: Omit<DutySchedule, 'id' | 'createdAt'>) => Promise<DutySchedule>;
@@ -193,6 +202,17 @@ const saveToStorage = <T,>(key: string, data: T) => {
   } catch (err) {
     console.warn(`Failed to save ${key} to localStorage:`, err);
   }
+};
+
+const mergeListsById = <T extends { id: string }>(prev: T[], next: T[]): T[] => {
+  if (next.length === 0) return prev;
+  const map = new Map<string, T>();
+  prev.forEach((item) => map.set(item.id, item));
+  next.forEach((item) => {
+    const existing = map.get(item.id);
+    map.set(item.id, existing ? { ...existing, ...item } : item);
+  });
+  return Array.from(map.values());
 };
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -485,8 +505,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!snapshot.empty) {
         const loaded: DutySchedule[] = [];
         snapshot.forEach((d) => loaded.push(d.data() as DutySchedule));
-        setSchedules(loaded);
-        saveToStorage('schedules', loaded);
+        setSchedules((prev) => mergeListsById(prev, loaded));
       }
     }, (err) => console.warn('jadwal onSnapshot error:', err));
 
@@ -494,8 +513,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!snapshot.empty) {
         const loaded: DutySchedule[] = [];
         snapshot.forEach((d) => loaded.push(d.data() as DutySchedule));
-        setSchedules(loaded);
-        saveToStorage('schedules', loaded);
+        setSchedules((prev) => mergeListsById(prev, loaded));
       }
     }, (err) => console.warn('duty_schedules onSnapshot error:', err));
 
@@ -503,8 +521,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!snapshot.empty) {
         const loaded: Attendance[] = [];
         snapshot.forEach((d) => loaded.push(d.data() as Attendance));
-        setAttendances(loaded);
-        saveToStorage('attendances', loaded);
+        setAttendances((prev) => mergeListsById(prev, loaded));
       }
     }, (err) => console.warn('attendances onSnapshot error:', err));
 
@@ -512,8 +529,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!snapshot.empty) {
         const loaded: Logbook[] = [];
         snapshot.forEach((d) => loaded.push(d.data() as Logbook));
-        setLogbooks(loaded);
-        saveToStorage('logbooks', loaded);
+        setLogbooks((prev) => mergeListsById(prev, loaded));
       }
     }, (err) => console.warn('bukuPiket onSnapshot error:', err));
 
@@ -521,8 +537,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!snapshot.empty) {
         const loaded: Logbook[] = [];
         snapshot.forEach((d) => loaded.push(d.data() as Logbook));
-        setLogbooks(loaded);
-        saveToStorage('logbooks', loaded);
+        setLogbooks((prev) => mergeListsById(prev, loaded));
       }
     }, (err) => console.warn('logbooks onSnapshot error:', err));
 
@@ -530,8 +545,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!snapshot.empty) {
         const loaded: Incident[] = [];
         snapshot.forEach((d) => loaded.push(d.data() as Incident));
-        setIncidents(loaded);
-        saveToStorage('incidents', loaded);
+        setIncidents((prev) => mergeListsById(prev, loaded));
       }
     }, (err) => console.warn('kejadian onSnapshot error:', err));
 
@@ -539,8 +553,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!snapshot.empty) {
         const loaded: Incident[] = [];
         snapshot.forEach((d) => loaded.push(d.data() as Incident));
-        setIncidents(loaded);
-        saveToStorage('incidents', loaded);
+        setIncidents((prev) => mergeListsById(prev, loaded));
       }
     }, (err) => console.warn('incidents onSnapshot error:', err));
 
@@ -548,8 +561,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!snapshot.empty) {
         const loaded: Handover[] = [];
         snapshot.forEach((d) => loaded.push(d.data() as Handover));
-        setHandovers(loaded);
-        saveToStorage('handovers', loaded);
+        setHandovers((prev) => mergeListsById(prev, loaded));
       }
     }, (err) => console.warn('handovers onSnapshot error:', err));
 
@@ -557,8 +569,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!snapshot.empty) {
         const loaded: DutyReplacement[] = [];
         snapshot.forEach((d) => loaded.push(d.data() as DutyReplacement));
-        setReplacements(loaded);
-        saveToStorage('replacements', loaded);
+        setReplacements((prev) => mergeListsById(prev, loaded));
       }
     }, (err) => console.warn('replacements onSnapshot error:', err));
 
@@ -1491,6 +1502,32 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     recordAudit('ACKNOWLEDGE_HANDOVER', 'Serah Terima', `Konfirmasi penerimaan serah terima tugas ID: ${handoverId}`, handoverId);
   };
 
+  const updateHandover = async (id: string, data: Partial<Handover>) => {
+    setHandovers((prev) =>
+      prev.map((h) => (h.id === id ? { ...h, ...data } : h))
+    );
+    if (isOnline) {
+      try {
+        await setDoc(doc(db, 'handovers', id), cleanFirestoreData(data), { merge: true });
+      } catch (e) {
+        console.warn('Failed to update handover in Firestore:', e);
+      }
+    }
+    recordAudit('UPDATE_HANDOVER', 'Serah Terima', `Memperbarui data serah terima ID ${id}`, id);
+  };
+
+  const deleteHandover = async (id: string) => {
+    setHandovers((prev) => prev.filter((h) => h.id !== id));
+    if (isOnline) {
+      try {
+        await deleteDoc(doc(db, 'handovers', id));
+      } catch (e) {
+        console.warn('Failed to delete handover in Firestore:', e);
+      }
+    }
+    recordAudit('DELETE_HANDOVER', 'Serah Terima', `Menghapus entri serah terima ID ${id}`, id);
+  };
+
   const createReplacement = async (rep: Omit<DutyReplacement, 'id' | 'createdAt'>) => {
     const newRep: DutyReplacement = {
       ...rep,
@@ -1551,6 +1588,128 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setNotifications((prev) => [notif, ...prev]);
 
     recordAudit('CREATE_REPLACEMENT', 'Penggantian Petugas', `Penggantian petugas ${rep.originalUserName} digantikan oleh ${rep.replacementUserName} (${rep.alasan})`, rep.scheduleId);
+  };
+
+  const updateReplacement = async (id: string, data: Partial<DutyReplacement>) => {
+    setReplacements((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, ...data } : r))
+    );
+    if (isOnline) {
+      try {
+        await setDoc(doc(db, 'replacements', id), cleanFirestoreData(data), { merge: true });
+      } catch (e) {
+        console.warn('Failed to update replacement in Firestore:', e);
+      }
+    }
+    recordAudit('UPDATE_REPLACEMENT', 'Penggantian Petugas', `Memperbarui data penggantian ID ${id}`, id);
+  };
+
+  const deleteReplacement = async (id: string) => {
+    setReplacements((prev) => prev.filter((r) => r.id !== id));
+    if (isOnline) {
+      try {
+        await deleteDoc(doc(db, 'replacements', id));
+      } catch (e) {
+        console.warn('Failed to delete replacement in Firestore:', e);
+      }
+    }
+    recordAudit('DELETE_REPLACEMENT', 'Penggantian Petugas', `Menghapus entri penggantian ID ${id}`, id);
+  };
+
+  const adminManualCheckIn = async (
+    scheduleId: string,
+    status: 'sedang_bertugas' | 'terlambat' | 'sakit' | 'izin' | 'lowbat_tunggu',
+    notes: string
+  ): Promise<{ success: boolean; message: string }> => {
+    const schedule = schedules.find((s) => s.id === scheduleId);
+    if (!schedule) {
+      return { success: false, message: 'Jadwal piket tidak ditemukan.' };
+    }
+
+    const nowIso = new Date().toISOString();
+    let targetStatus: ScheduleStatus = 'sedang_bertugas';
+    let labelNotes = notes || 'Presensi Manual oleh Admin';
+
+    if (status === 'terlambat') {
+      targetStatus = 'terlambat';
+    } else if (status === 'sakit') {
+      targetStatus = 'dibatalkan';
+      labelNotes = `[SAKIT] ${notes}`;
+    } else if (status === 'izin') {
+      targetStatus = 'dibatalkan';
+      labelNotes = `[IZIN] ${notes}`;
+    } else if (status === 'lowbat_tunggu') {
+      targetStatus = 'belum_checkin';
+      labelNotes = `[STATUS TUNGGU - HP LOW-BAT/KENDALA HP] ${notes}`;
+    }
+
+    if (status === 'sedang_bertugas' || status === 'terlambat') {
+      const attId = `att-${Date.now()}`;
+      const newAttendance: Attendance = {
+        id: attId,
+        scheduleId: schedule.id,
+        userId: schedule.userId,
+        userName: schedule.userName || 'Petugas',
+        postId: schedule.postId,
+        postName: schedule.postName || 'Pos Piket',
+        tanggal: schedule.tanggal,
+        checkInAt: nowIso,
+        isLate: status === 'terlambat',
+        lateMinutes: status === 'terlambat' ? 15 : 0,
+        status: 'sedang_bertugas',
+        deviceInfo: 'Admin Manual Override',
+        checkInNotes: `[Presensi Manual Admin] ${labelNotes}`,
+        createdAt: nowIso
+      };
+
+      setAttendances((prev) => [newAttendance, ...prev]);
+      setSchedules((prev) =>
+        prev.map((s) =>
+          s.id === scheduleId
+            ? { ...s, status: targetStatus, attendanceId: attId, notes: labelNotes, updatedAt: nowIso }
+            : s
+        )
+      );
+
+      if (isOnline) {
+        try {
+          await Promise.all([
+            setDoc(doc(db, 'attendances', attId), newAttendance, { merge: true }),
+            setDoc(doc(db, 'jadwal', scheduleId), { status: targetStatus, attendanceId: attId, notes: labelNotes, updatedAt: nowIso }, { merge: true }),
+            setDoc(doc(db, 'duty_schedules', scheduleId), { status: targetStatus, attendanceId: attId, notes: labelNotes, updatedAt: nowIso }, { merge: true })
+          ]);
+        } catch (e) {
+          console.warn('Failed to sync admin manual check-in to Firestore:', e);
+        }
+      }
+    } else {
+      setSchedules((prev) =>
+        prev.map((s) =>
+          s.id === scheduleId
+            ? { ...s, status: targetStatus, notes: labelNotes, updatedAt: nowIso }
+            : s
+        )
+      );
+
+      if (isOnline) {
+        try {
+          await Promise.all([
+            setDoc(doc(db, 'jadwal', scheduleId), { status: targetStatus, notes: labelNotes, updatedAt: nowIso }, { merge: true }),
+            setDoc(doc(db, 'duty_schedules', scheduleId), { status: targetStatus, notes: labelNotes, updatedAt: nowIso }, { merge: true })
+          ]);
+        } catch (e) {
+          console.warn('Failed to sync schedule status update to Firestore:', e);
+        }
+      }
+    }
+
+    sound.playSuccess();
+    recordAudit('ADMIN_MANUAL_CHECKIN', 'Kehadiran Piket', `Admin memperbarui status piket ${schedule.userName} (${status}): ${labelNotes}`, scheduleId);
+
+    return {
+      success: true,
+      message: `Status presensi ${schedule.userName} berhasil diperbarui oleh Admin.`
+    };
   };
 
   const createSchedule = async (schedule: Omit<DutySchedule, 'id' | 'createdAt'>): Promise<DutySchedule> => {
@@ -3058,8 +3217,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateIncident,
         deleteIncident,
         createHandover,
+        updateHandover,
+        deleteHandover,
         acknowledgeHandover,
         createReplacement,
+        updateReplacement,
+        deleteReplacement,
+        adminManualCheckIn,
         createSchedule,
         updateSchedule,
         deleteSchedule,
