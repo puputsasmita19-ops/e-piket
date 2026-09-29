@@ -50,11 +50,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, on
   const [editFormNotes, setEditFormNotes] = useState<string>('');
   const [editSubmitting, setEditSubmitting] = useState<boolean>(false);
 
+  const isScheduleTimeFinished = (sch: DutySchedule) => {
+    if (sch.status === 'sudah_checkout' || sch.status === 'dibatalkan') return true;
+    if (!sch.jamSelesai) return false;
+    
+    try {
+      const now = new Date();
+      const [hours, minutes] = sch.jamSelesai.split(':').map(Number);
+      const endTime = new Date();
+      endTime.setHours(hours, minutes, 0, 0);
+      return now > endTime;
+    } catch (e) {
+      return false;
+    }
+  };
+
   const today = getTodayDateString();
   const dayName = getDayNameIndo(today);
   const todaySchedules = schedules.filter((s) => s.tanggal === today);
-  const activeSchedules = todaySchedules.filter((s) => s.status !== 'sudah_checkout' && s.status !== 'dibatalkan');
-  const historySchedules = todaySchedules.filter((s) => s.status === 'sudah_checkout' || s.status === 'dibatalkan');
+  const activeSchedules = todaySchedules.filter((s) => !isScheduleTimeFinished(s));
+  const historySchedules = todaySchedules.filter((s) => isScheduleTimeFinished(s));
 
   const totalGuru = users.filter((u) => u.role === 'guru').length;
   const totalTendik = users.filter((u) => u.role === 'tendik').length;
@@ -375,31 +390,65 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, on
                         return (
                           <div
                             key={sch.id}
-                            className="p-2.5 bg-white dark:bg-slate-800 rounded-xl border border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between shadow-2xs"
+                            className="p-2.5 bg-white dark:bg-slate-800 rounded-xl border border-slate-200/80 dark:border-slate-700/80 flex flex-col gap-2 shadow-2xs"
                           >
-                            <div className="min-w-0 flex-1 pr-2">
-                              <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{sch.userName}</p>
-                              <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                                {sch.jamMulai} - {sch.jamSelesai} • {sch.userRole === 'guru' ? 'Guru' : 'Tendik'}
-                              </p>
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="min-w-0 flex-1 pr-2">
+                                <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{sch.userName}</p>
+                                <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                                  {sch.jamMulai} - {sch.jamSelesai} • {sch.userRole === 'guru' ? 'Guru' : 'Tendik'}
+                                </p>
+                              </div>
+                              <div className="text-right shrink-0">
+                                {sch.status === 'sedang_bertugas' && (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                                    Hadir {att?.checkInAt ? formatTimeIndo(att.checkInAt).split(' ')[0] : ''}
+                                  </span>
+                                )}
+                                {sch.status === 'terlambat' && (
+                                  <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300">
+                                    Terlambat
+                                  </span>
+                                )}
+                                {(sch.status === 'belum_checkin' || sch.status === 'belum_piket') && (
+                                  <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                                    {sch.notes?.includes('LOW-BAT') ? '⏳ Status Tunggu (Low-Bat)' : 'Belum Hadir'}
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                            <div className="text-right shrink-0">
-                              {sch.status === 'sedang_bertugas' && (
-                                <span className="inline-flex items-center gap-1 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
-                                  Hadir {att?.checkInAt ? formatTimeIndo(att.checkInAt).split(' ')[0] : ''}
-                                </span>
-                              )}
-                              {sch.status === 'terlambat' && (
-                                <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300">
-                                  Terlambat
-                                </span>
-                              )}
-                              {(sch.status === 'belum_checkin' || sch.status === 'belum_piket') && (
-                                <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
-                                  {sch.notes?.includes('LOW-BAT') ? '⏳ Status Tunggu (Low-Bat)' : 'Belum Hadir'}
-                                </span>
-                              )}
+
+                            {/* Direct Action Buttons for Quick Edit & Delete */}
+                            <div className="flex items-center justify-end gap-2 pt-1.5 border-t border-slate-100 dark:border-slate-700/60">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingSchedule(sch);
+                                  setEditFormUserId(sch.userId);
+                                  setEditFormJamMulai(sch.jamMulai || '07:00');
+                                  setEditFormJamSelesai(sch.jamSelesai || '14:00');
+                                  setEditFormNotes(sch.notes || '');
+                                }}
+                                className="p-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-[10px] font-bold flex items-center gap-1 cursor-pointer transition"
+                                title="Ubah Jadwal"
+                              >
+                                <Pencil className="w-3 h-3" />
+                                <span>Ubah</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteScheduleItem(sch);
+                                }}
+                                className="p-1 rounded bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 text-[10px] font-bold flex items-center gap-1 cursor-pointer transition"
+                                title="Hapus Jadwal"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                <span>Hapus</span>
+                              </button>
                             </div>
                           </div>
                         );
@@ -1213,7 +1262,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, on
                         )}
 
                         {/* Direct action buttons for this officer */}
-                        <div className="flex items-center gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+                        <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
                           <button
                             type="button"
                             onClick={() => {
@@ -1221,10 +1270,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, on
                               setOverrideSchedule(sch);
                               setOverrideNotes(sch.notes || '');
                             }}
-                            className="flex-1 py-1.5 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:hover:bg-emerald-900/80 dark:text-emerald-300 font-bold text-xs border border-emerald-200 dark:border-emerald-800 transition flex items-center justify-center gap-1.5 cursor-pointer"
+                            className="flex-1 py-1.5 px-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300 font-bold text-[11px] border border-emerald-200 dark:border-emerald-800 transition flex items-center justify-center gap-1 cursor-pointer"
                           >
                             <Pencil className="w-3.5 h-3.5" />
-                            <span>Presensi Admin</span>
+                            <span>Presensi</span>
                           </button>
 
                           <button
@@ -1235,10 +1284,40 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveTab, on
                               setReplacementUserId('');
                               setReplacementReason('');
                             }}
-                            className="flex-1 py-1.5 px-3 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-700 dark:bg-teal-950/80 dark:hover:bg-teal-900/80 dark:text-teal-300 font-bold text-xs border border-teal-200 dark:border-teal-800 transition flex items-center justify-center gap-1.5 cursor-pointer"
+                            className="flex-1 py-1.5 px-2 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-700 dark:bg-teal-950/80 dark:text-teal-300 font-bold text-[11px] border border-teal-200 dark:border-teal-800 transition flex items-center justify-center gap-1 cursor-pointer"
                           >
                             <UserCog className="w-3.5 h-3.5" />
-                            <span>Ganti Petugas</span>
+                            <span>Ganti</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedPosDetail(null);
+                              setEditingSchedule(sch);
+                              setEditFormUserId(sch.userId);
+                              setEditFormJamMulai(sch.jamMulai || '07:00');
+                              setEditFormJamSelesai(sch.jamSelesai || '14:00');
+                              setEditFormNotes(sch.notes || '');
+                            }}
+                            className="flex-1 py-1.5 px-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 font-bold text-[11px] transition flex items-center justify-center gap-1 cursor-pointer"
+                            title="Ubah Jadwal"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                            <span>Ubah</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedPosDetail(null);
+                              handleDeleteScheduleItem(sch);
+                            }}
+                            className="flex-1 py-1.5 px-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/40 dark:hover:bg-rose-900/40 font-bold text-[11px] transition flex items-center justify-center gap-1 cursor-pointer"
+                            title="Hapus Jadwal"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Hapus</span>
                           </button>
                         </div>
                       </div>

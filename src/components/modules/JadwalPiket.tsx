@@ -835,40 +835,52 @@ export const JadwalPiket: React.FC = () => {
                         return (
                           <div
                             key={sch.id}
-                            onClick={() => handleOpenEditScheduleModal(sch)}
-                            className="p-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xs hover:shadow-xs hover:border-emerald-400 transition-all cursor-pointer group relative"
+                            className="p-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xs hover:shadow-xs transition-all relative"
                             title={`${sch.userName} - ${sch.postName} (${sch.shiftName})`}
                           >
                             <div className="flex items-center justify-between gap-1">
                               <span className="text-[9.5px] font-extrabold text-slate-900 dark:text-white truncate block">
                                 {sch.userName}
                               </span>
-                              <div className="flex items-center gap-1">
-                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${badge.dot}`} />
-                                {currentRole === 'admin' && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setDeleteScheduleState({
-                                        isOpen: true,
-                                        scheduleId: sch.id,
-                                        userName: sch.userName || 'Petugas',
-                                        postName: sch.postName || 'Pos Piket',
-                                        tanggal: sch.tanggal
-                                      });
-                                    }}
-                                    className="opacity-0 group-hover:opacity-100 p-0.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition-opacity"
-                                    title="Hapus Jadwal Ini"
-                                  >
-                                    <Trash2 className="w-3 h-3" />
-                                  </button>
-                                )}
-                              </div>
+                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${badge.dot}`} />
                             </div>
                             <div className="text-[8.5px] text-emerald-700 dark:text-emerald-400 font-bold truncate">
                               {sch.postName}
                             </div>
+                            
+                            {/* Action Buttons: Prominent and Always Visible for Admin */}
+                            {currentRole === 'admin' && (
+                              <div className="flex items-center gap-1.5 mt-1 pt-1 border-t border-slate-100 dark:border-slate-800 justify-end">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenEditScheduleModal(sch);
+                                  }}
+                                  className="p-0.5 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition"
+                                  title="Edit Jadwal"
+                                >
+                                  <Edit3 className="w-3 h-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDeleteScheduleState({
+                                      isOpen: true,
+                                      scheduleId: sch.id,
+                                      userName: sch.userName || 'Petugas',
+                                      postName: sch.postName || 'Pos Piket',
+                                      tanggal: sch.tanggal
+                                    });
+                                  }}
+                                  className="p-0.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition"
+                                  title="Hapus Jadwal"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                            )}
                           </div>
                         );
                       })
