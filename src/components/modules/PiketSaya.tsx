@@ -38,21 +38,21 @@ export const PiketSaya: React.FC = () => {
   const dayName = getDayNameIndo(today);
 
   // Today's schedule for me
-  const myTodaySchedule = schedules.find(
-    (s) => s.tanggal === today && (s.userId === currentUser?.id || s.originalUserId === currentUser?.id)
+  const myTodaySchedule = (schedules || []).find(
+    (s) => s && s.tanggal === today && (s.userId === currentUser?.id || s.originalUserId === currentUser?.id)
   );
 
   const myAttendance = myTodaySchedule
-    ? attendances.find((a) => a.scheduleId === myTodaySchedule.id)
+    ? (attendances || []).find((a) => a && a.scheduleId === myTodaySchedule.id)
     : null;
 
-  const hasPendingOfflineAction = myTodaySchedule && pendingOfflineActions.some(
-    (a) => a.payload?.scheduleId === myTodaySchedule.id || a.payload?.attendance?.scheduleId === myTodaySchedule.id
+  const hasPendingOfflineAction = myTodaySchedule && (pendingOfflineActions || []).some(
+    (a) => a && (a.payload?.scheduleId === myTodaySchedule.id || a.payload?.attendance?.scheduleId === myTodaySchedule.id)
   );
 
   // History of my duties
-  const myHistorySchedules = schedules
-    .filter((s) => s.userId === currentUser?.id && Boolean(s.tanggal) && s.tanggal <= today)
+  const myHistorySchedules = (schedules || [])
+    .filter((s) => s && s.userId === currentUser?.id && Boolean(s.tanggal) && s.tanggal <= today)
     .sort((a, b) => (b?.tanggal || '').localeCompare(a?.tanggal || ''));
 
   const handleOpenSelfieModal = (mode: 'checkin' | 'checkout', schedule: any) => {

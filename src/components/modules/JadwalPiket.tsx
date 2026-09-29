@@ -198,14 +198,16 @@ export const JadwalPiket: React.FC = () => {
     }
   };
 
-  const filteredSchedules = schedules.filter((s) => {
+  const filteredSchedules = (schedules || []).filter((s) => {
+    if (!s) return false;
+    const q = (searchQuery || '').toLowerCase().trim();
     const matchesDay = selectedDayFilter === 'all' || s.hari === selectedDayFilter;
     const matchesPost = selectedPostFilter === 'all' || s.postId === selectedPostFilter;
     const matchesTeacher = selectedTeacherFilter === 'all' || s.userId === selectedTeacherFilter;
-    const matchesSearch = 
-      s.userName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.postName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.tanggal.includes(searchQuery);
+    const matchesSearch = !q ||
+      (s.userName || '').toLowerCase().includes(q) ||
+      (s.postName || '').toLowerCase().includes(q) ||
+      (s.tanggal || '').includes(q);
 
     return matchesDay && matchesPost && matchesTeacher && matchesSearch;
   });

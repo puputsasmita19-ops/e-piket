@@ -47,12 +47,14 @@ export const BukuPiket: React.FC = () => {
   const today = getTodayDateString();
 
   // Filtered logbooks
-  const filteredLogbooks = logbooks.filter((log) => {
-    const matchesSearch = 
-      log.postName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      log.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      log.kondisiSelamaBertugas.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (log.catatanKhusus && log.catatanKhusus.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredLogbooks = (logbooks || []).filter((log) => {
+    if (!log) return false;
+    const q = (searchQuery || '').toLowerCase().trim();
+    const matchesSearch = !q ||
+      (log.postName || '').toLowerCase().includes(q) ||
+      (log.userName || '').toLowerCase().includes(q) ||
+      (log.kondisiSelamaBertugas || '').toLowerCase().includes(q) ||
+      (Boolean(log.catatanKhusus) && (log.catatanKhusus || '').toLowerCase().includes(q));
 
     const matchesPost = selectedPostFilter === 'all' || log.postId === selectedPostFilter;
     const matchesDate = !selectedDateFilter || log.tanggal === selectedDateFilter;

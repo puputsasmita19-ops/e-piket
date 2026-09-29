@@ -89,12 +89,14 @@ export const Kejadian: React.FC = () => {
 
   const today = getTodayDateString();
 
-  const filteredIncidents = incidents.filter((inc) => {
-    const matchesSearch = 
-      inc.jenisKejadian.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      inc.deskripsi.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      inc.lokasi.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      inc.createdByUserName.toLowerCase().includes(searchQuery.toLowerCase());
+  const filteredIncidents = (incidents || []).filter((inc) => {
+    if (!inc) return false;
+    const q = (searchQuery || '').toLowerCase().trim();
+    const matchesSearch = !q ||
+      (inc.jenisKejadian || '').toLowerCase().includes(q) ||
+      (inc.deskripsi || '').toLowerCase().includes(q) ||
+      (inc.lokasi || '').toLowerCase().includes(q) ||
+      (inc.createdByUserName || '').toLowerCase().includes(q);
 
     const matchesCat = categoryFilter === 'all' || inc.kategori === categoryFilter;
     const matchesPrio = priorityFilter === 'all' || inc.prioritas === priorityFilter;

@@ -94,12 +94,13 @@ export const Laporan: React.FC = () => {
   // Filter schedules based on report type & criteria
   const filteredSchedules = useMemo(() => {
     const weekRange = getWeekRange(selectedDate);
-    return schedules.filter((s) => {
+    return (schedules || []).filter((s) => {
+      if (!s) return false;
       let dateMatch = true;
       if (reportType === 'harian') {
         dateMatch = s.tanggal === selectedDate;
       } else if (reportType === 'bulanan') {
-        dateMatch = Boolean(s && s.tanggal && typeof s.tanggal === 'string' && s.tanggal.startsWith(selectedDate.substring(0, 7)));
+        dateMatch = Boolean(s && s.tanggal && typeof s.tanggal === 'string' && s.tanggal.startsWith((selectedDate || '').substring(0, 7)));
       } else if (reportType === 'mingguan') {
         dateMatch = Boolean(s && s.tanggal && typeof s.tanggal === 'string' && s.tanggal >= weekRange.start && s.tanggal <= weekRange.end);
       } else if (reportType === 'semester') {
@@ -115,32 +116,33 @@ export const Laporan: React.FC = () => {
 
   const filteredIncidents = useMemo(() => {
     const weekRange = getWeekRange(selectedDate);
-    return incidents.filter((i) => {
+    return (incidents || []).filter((i) => {
+      if (!i) return false;
       if (reportType === 'harian') return i.tanggal === selectedDate;
-      if (reportType === 'bulanan') return Boolean(i && i.tanggal && typeof i.tanggal === 'string' && i.tanggal.startsWith(selectedDate.substring(0, 7)));
+      if (reportType === 'bulanan') return Boolean(i && i.tanggal && typeof i.tanggal === 'string' && i.tanggal.startsWith((selectedDate || '').substring(0, 7)));
       if (reportType === 'mingguan') return Boolean(i && i.tanggal && typeof i.tanggal === 'string' && i.tanggal >= weekRange.start && i.tanggal <= weekRange.end);
-      if (reportType === 'semester') return i.tanggal ? true : false; // all incidents
+      if (reportType === 'semester') return Boolean(i.tanggal);
       return true;
     });
   }, [incidents, reportType, selectedDate]);
 
-  const hadirCount = filteredSchedules.filter((s) => s.status === 'sedang_bertugas' || s.status === 'sudah_checkout').length;
-  const terlambatCount = filteredSchedules.filter((s) => s.status === 'terlambat').length;
+  const hadirCount = filteredSchedules.filter((s) => s && (s.status === 'sedang_bertugas' || s.status === 'sudah_checkout')).length;
+  const terlambatCount = filteredSchedules.filter((s) => s && s.status === 'terlambat').length;
   const totalSchedules = filteredSchedules.length;
   const disciplineRate = totalSchedules > 0 ? Math.round((hadirCount / totalSchedules) * 100) : 100;
 
   // Monthly aggregated stats per teacher (for monthly view & export)
   const monthlyTeacherStats = useMemo(() => {
-    const monthStr = selectedDate.substring(0, 7);
-    const monthSchs = schedules.filter((s) => s && s.tanggal && typeof s.tanggal === 'string' && s.tanggal.startsWith(monthStr));
-    return users
-      .filter((u) => u.role === 'guru' || u.role === 'tendik')
+    const monthStr = (selectedDate || '').substring(0, 7);
+    const monthSchs = (schedules || []).filter((s) => s && s.tanggal && typeof s.tanggal === 'string' && s.tanggal.startsWith(monthStr));
+    return (users || [])
+      .filter((u) => u && (u.role === 'guru' || u.role === 'tendik'))
       .map((u) => {
-        const userSchs = monthSchs.filter((s) => s.userId === u.id);
+        const userSchs = monthSchs.filter((s) => s && s.userId === u.id);
         const total = userSchs.length;
-        const onTime = userSchs.filter((s) => s.status === 'sedang_bertugas' || s.status === 'sudah_checkout').length;
-        const late = userSchs.filter((s) => s.status === 'terlambat').length;
-        const replaced = userSchs.filter((s) => s.isReplacement || s.status === 'digantikan').length;
+        const onTime = userSchs.filter((s) => s && (s.status === 'sedang_bertugas' || s.status === 'sudah_checkout')).length;
+        const late = userSchs.filter((s) => s && s.status === 'terlambat').length;
+        const replaced = userSchs.filter((s) => s && (s.isReplacement || s.status === 'digantikan')).length;
         const rate = total > 0 ? Math.round((onTime / total) * 100) : 100;
         let predikat = 'Sangat Tertib';
         if (rate < 75) predikat = 'Perlu Pembinaan';
@@ -153,10 +155,10 @@ export const Laporan: React.FC = () => {
 
   // Monthly aggregated stats per post
   const monthlyPostStats = useMemo(() => {
-    const monthStr = selectedDate.substring(0, 7);
-    const monthSchs = schedules.filter((s) => s && s.tanggal && typeof s.tanggal === 'string' && s.tanggal.startsWith(monthStr));
-    return posts.map((p) => {
-      const postSchs = monthSchs.filter((s) => s.postId === p.id);
+    const monthStr = (selectedDate || '').substring(0, 7);
+    const monthSchs = (schedules || []).filter((s) => s && s.tanggal && typeof s.tanggal === 'string' && s.tanggal.startsWith(monthStr));
+    return (posts || []).filter(Boolean).map((p) => {
+      const postSchs = monthSchs.filter((s) => s && s.postId === p.id);
       const total = postSchs.length;
       const onTime = postSchs.filter((s) => s.status === 'sedang_bertugas' || s.status === 'sudah_checkout').length;
       const late = postSchs.filter((s) => s.status === 'terlambat').length;

@@ -10,11 +10,13 @@ export const AuditLogModule: React.FC = () => {
   const [selectedModule, setSelectedModule] = useState('all');
   const [viewMode, setViewMode] = useState<'glide' | 'table'>('glide');
 
-  const filteredLogs = auditLogs.filter((log) => {
-    const matchSearch = 
-      log.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      log.details.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      log.action.toLowerCase().includes(searchQuery.toLowerCase());
+  const filteredLogs = (auditLogs || []).filter((log) => {
+    if (!log) return false;
+    const query = (searchQuery || '').toLowerCase().trim();
+    const userName = (log.userName || '').toLowerCase();
+    const details = (log.details || '').toLowerCase();
+    const action = (log.action || '').toLowerCase();
+    const matchSearch = !query || userName.includes(query) || details.includes(query) || action.includes(query);
 
     const matchModule = selectedModule === 'all' || log.module === selectedModule;
     return matchSearch && matchModule;
