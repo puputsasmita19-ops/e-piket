@@ -101,7 +101,7 @@ export const AdminWeeklyAttendanceBarChart: React.FC<AdminWeeklyAttendanceBarCha
       let terlambat = 0;
 
       attendedSchedules.forEach((sch) => {
-        const att = attendances.find((a) => a.scheduleId === sch.id || a.tanggal === sch.tanggal);
+        const att = attendances.find((a) => a.scheduleId === sch.id || (a.userId === sch.userId && a.tanggal === sch.tanggal));
         if (att?.isLate || sch.status === 'terlambat') {
           terlambat += 1;
         } else {

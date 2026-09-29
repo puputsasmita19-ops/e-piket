@@ -52,8 +52,8 @@ export const PiketSaya: React.FC = () => {
 
   // History of my duties
   const myHistorySchedules = schedules
-    .filter((s) => s.userId === currentUser?.id && s.tanggal <= today)
-    .sort((a, b) => b.tanggal.localeCompare(a.tanggal));
+    .filter((s) => s.userId === currentUser?.id && Boolean(s.tanggal) && s.tanggal <= today)
+    .sort((a, b) => (b?.tanggal || '').localeCompare(a?.tanggal || ''));
 
   const handleOpenSelfieModal = (mode: 'checkin' | 'checkout', schedule: any) => {
     // Strict Location Check for Check-in (can be bypassed for checkout or if inside radius)

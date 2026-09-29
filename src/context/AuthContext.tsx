@@ -137,11 +137,29 @@ const requestGsiOAuthToken = (clientId: string, promptMode: 'consent' | '' = 'co
   });
 };
 
+const isDummyUserRecord = (u: any): boolean => {
+  if (!u) return true;
+  const id = String(u.id || '');
+  const nama = String(u.nama || '');
+  const email = String(u.email || '');
+  if (id === 'user-kepsek') return true;
+  if (id.startsWith('user-ptk-') || id.startsWith('guru-') || id.startsWith('demo-') || id.startsWith('test-')) return true;
+  if (nama.includes('Ahmad Dahlan') || email.includes('kepsek@sekolah.sch.id')) return true;
+  return false;
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [usersList, setUsersList] = useState<User[]>(() => {
     try {
       const saved = localStorage.getItem('epiket_users_list');
-      return saved ? JSON.parse(saved) : INITIAL_USERS;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const clean = parsed.filter((u) => !isDummyUserRecord(u));
+          if (clean.length > 0) return clean;
+        }
+      }
+      return INITIAL_USERS;
     } catch (e) {
       return INITIAL_USERS;
     }
@@ -153,7 +171,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (savedUserJson) {
       try {
         const parsed = JSON.parse(savedUserJson);
-        if (parsed && parsed.id) return parsed;
+        if (parsed && parsed.id && !isDummyUserRecord(parsed)) return parsed;
       } catch (e) {
         console.warn('Failed parsing epiket_current_user:', e);
       }
@@ -161,11 +179,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // 2. Lookup by ID in persisted usersList or INITIAL_USERS
     const savedUserId = localStorage.getItem(AUTH_STORAGE_KEY);
-    if (savedUserId) {
+    if (savedUserId && !isDummyUserRecord({ id: savedUserId })) {
       try {
         const savedList = localStorage.getItem('epiket_users_list');
         const list: User[] = savedList ? JSON.parse(savedList) : INITIAL_USERS;
-        const found = list.find((u) => u.id === savedUserId) || INITIAL_USERS.find((u) => u.id === savedUserId);
+        const cleanList = list.filter((u) => !isDummyUserRecord(u));
+        const found = cleanList.find((u) => u.id === savedUserId) || INITIAL_USERS.find((u) => u.id === savedUserId);
         if (found) return found;
       } catch (e) {}
     }
@@ -194,7 +213,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           const parsed = JSON.parse(e.newValue);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            setUsersList(parsed);
+            const clean = parsed.filter((u) => !isDummyUserRecord(u));
+            if (clean.length > 0) setUsersList(clean);
           }
         } catch {}
       }
@@ -205,7 +225,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!snapshot.empty) {
         const loaded: User[] = [];
         snapshot.forEach((d) => {
-          loaded.push(d.data() as User);
+          const u = d.data() as User;
+          if (!isDummyUserRecord(u)) loaded.push(u);
         });
         if (loaded.length > 0) {
           setUsersList(loaded);
@@ -214,9 +235,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }, (err) => console.warn('Auth users onSnapshot error:', err));
 
+    const unsubCanonicalUser = onSnapshot(collection(db, 'user'), (snapshot) => {
+      if (!snapshot.empty) {
+        const loaded: User[] = [];
+        snapshot.forEach((d) => {
+          const u = d.data() as User;
+          if (!isDummyUserRecord(u)) loaded.push(u);
+        });
+        if (loaded.length > 0) {
+          setUsersList((prev) => {
+            const existingIds = new Set(loaded.map((u) => u.id));
+            const merged = [...loaded, ...prev.filter((p) => !existingIds.has(p.id) && !isDummyUserRecord(p))];
+            localStorage.setItem('epiket_users_list', JSON.stringify(merged));
+            return merged;
+          });
+        }
+      }
+    }, (err) => console.warn('Auth user onSnapshot error:', err));
+
     return () => {
       window.removeEventListener('storage', handleStorage);
       unsubUsers();
+      unsubCanonicalUser();
     };
   }, []);
 

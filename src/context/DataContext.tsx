@@ -57,6 +57,7 @@ import {
   setDoc, 
   getDoc,
   getDocs,
+  updateDoc,
   collection,
   deleteDoc,
   onSnapshot,
@@ -168,9 +169,11 @@ interface DataContextType {
   markAllNotificationsAsRead: () => void;
   sendCustomWhatsApp: (toPhone: string, message: string) => Promise<{ success: boolean; message: string }>;
   
-  // Audit & Reset
+  // Audit & Reset / Purge Commercial Data
   recordAudit: (action: string, module: string, details: string, recordId?: string, oldData?: any, newData?: any) => void;
+  resetToCleanState: () => void;
   resetToDemoData: () => void;
+  purgeAllDemoAndShadowData: () => Promise<{ success: boolean; message: string; deletedCount: number }>;
 
   // Admin Panic Mode & Disaster Recovery Snapshots
   snapshots: SystemSnapshot[];
@@ -228,8 +231,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [users, setUsers] = useState<User[]>(() => {
     const loaded = loadInitial<User[]>('users', INITIAL_USERS);
     if (Array.isArray(loaded) && loaded.length > 0) {
-      // Filter out any legacy dummy teacher accounts (user-ptk-* or guru-*)
-      const filtered = loaded.filter((u) => !u.id.startsWith('user-ptk-') && !u.id.startsWith('guru-'));
+      // Filter out any legacy dummy teacher or dummy kepsek accounts
+      const filtered = loaded.filter((u) => 
+        !u.id.startsWith('user-ptk-') && 
+        !u.id.startsWith('guru-') && 
+        !u.id.startsWith('demo-') &&
+        u.id !== 'user-kepsek' &&
+        u.nama !== 'Dr. H. Ahmad Dahlan, M.Pd.' &&
+        u.email !== 'kepsek@sekolah.sch.id'
+      );
       if (filtered.length === 0) return INITIAL_USERS;
       return filtered;
     }
@@ -392,29 +402,45 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     refreshIndexedDBState();
     checkCloudStatus();
 
-    // 1. Purge any legacy dummy teachers (user-ptk-* or guru-*) from Firestore
+    // 1. Purge any legacy dummy teachers and demo accounts from Firestore
     const purgeLegacyDummyData = async () => {
       try {
-        const usersSnap = await getDocs(collection(db, 'users'));
-        const dummyDocIds: string[] = [];
-        usersSnap.forEach((d) => {
-          if (d.id.startsWith('user-ptk-') || d.id.startsWith('guru-')) {
-            dummyDocIds.push(d.id);
+        const isDummyUserRecord = (docId: string, data?: any) => {
+          if (docId === 'user-kepsek') return true;
+          if (docId.startsWith('user-ptk-') || docId.startsWith('guru-') || docId.startsWith('demo-') || docId.startsWith('test-')) return true;
+          const nama = String(data?.nama || '');
+          const email = String(data?.email || '');
+          if (nama.includes('Ahmad Dahlan') || email.includes('kepsek@sekolah.sch.id')) return true;
+          return false;
+        };
+
+        // Purge from both 'users' and 'user' collections
+        for (const colName of ['users', 'user']) {
+          try {
+            const snap = await getDocs(collection(db, colName));
+            const dummyDocIds: string[] = [];
+            snap.forEach((d) => {
+              if (isDummyUserRecord(d.id, d.data())) {
+                dummyDocIds.push(d.id);
+              }
+            });
+
+            if (dummyDocIds.length > 0) {
+              console.log(`[Clean] Menghapus ${dummyDocIds.length} akun demo/bayangan dari koleksi '${colName}'...`);
+              const CHUNK = 400;
+              for (let i = 0; i < dummyDocIds.length; i += CHUNK) {
+                const chunk = dummyDocIds.slice(i, i + CHUNK);
+                const b = writeBatch(db);
+                chunk.forEach((id) => b.delete(doc(db, colName, id)));
+                await b.commit();
+              }
+            }
+          } catch (colErr) {
+            console.warn(`Purge '${colName}' notice:`, colErr);
           }
-        });
-        if (dummyDocIds.length > 0) {
-          console.log(`Menghapus ${dummyDocIds.length} data guru dummy dari Firestore...`);
-          const CHUNK = 400;
-          for (let i = 0; i < dummyDocIds.length; i += CHUNK) {
-            const chunk = dummyDocIds.slice(i, i + CHUNK);
-            const b = writeBatch(db);
-            chunk.forEach((id) => b.delete(doc(db, 'users', id)));
-            await b.commit();
-          }
-          console.log('Semua 38 data guru dummy berhasil dihapus dari Firebase Firestore.');
         }
 
-        // Ensure baseline admin and kepsek exist in Firestore without overwriting custom PINs or profiles
+        // Ensure baseline admin exists in Firestore without overwriting custom PINs or profiles
         for (const u of INITIAL_USERS) {
           const userDocRef = doc(db, 'users', u.id);
           const userSnap = await getDoc(userDocRef);
@@ -434,16 +460,29 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     purgeLegacyDummyData();
 
+    const isDummyAccount = (u: User) => {
+      if (!u) return true;
+      if (u.id === 'user-kepsek' || u.id.startsWith('user-ptk-') || u.id.startsWith('guru-') || u.id.startsWith('demo-') || u.id.startsWith('test-')) return true;
+      if (u.nama?.includes('Ahmad Dahlan') || u.email?.includes('kepsek@sekolah.sch.id')) return true;
+      return false;
+    };
+
     // 2. Real-time Live Firestore Subscriptions (Two-Way Automatic Synchronization)
     // Synchronize both canonical schemas ('user', 'jadwal', 'bukuPiket', 'kejadian') and mirrors
     const unsubCanonicalUser = onSnapshot(collection(db, 'user'), (snapshot) => {
       if (!snapshot.empty) {
         const loaded: User[] = [];
-        snapshot.forEach((d) => loaded.push(d.data() as User));
+        snapshot.forEach((d) => {
+          const u = d.data() as User;
+          if (!isDummyAccount(u)) loaded.push(u);
+        });
         if (loaded.length > 0) {
-          setUsers(loaded);
-          saveToStorage('users', loaded);
-          localStorage.setItem('epiket_users_list', JSON.stringify(loaded));
+          setUsers((prev) => {
+            const merged = mergeListsById(prev.filter((p) => !isDummyAccount(p)), loaded);
+            saveToStorage('users', merged);
+            localStorage.setItem('epiket_users_list', JSON.stringify(merged));
+            return merged;
+          });
           setIsFirestoreConnected(true);
         }
       }
@@ -453,12 +492,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!snapshot.empty) {
         const loaded: User[] = [];
         snapshot.forEach((d) => {
-          loaded.push(d.data() as User);
+          const u = d.data() as User;
+          if (!isDummyAccount(u)) loaded.push(u);
         });
         if (loaded.length > 0) {
-          setUsers(loaded);
-          saveToStorage('users', loaded);
-          localStorage.setItem('epiket_users_list', JSON.stringify(loaded));
+          setUsers((prev) => {
+            const merged = mergeListsById(prev.filter((p) => !isDummyAccount(p)), loaded);
+            saveToStorage('users', merged);
+            localStorage.setItem('epiket_users_list', JSON.stringify(merged));
+            return merged;
+          });
           setIsFirestoreConnected(true);
         }
       }
@@ -766,19 +809,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ): Promise<CachedReport> => {
     const reportSchedules = schedules.filter((s) => {
       if (type === 'harian') return s.tanggal === dateStr;
-      if (type === 'bulanan') return s.tanggal.startsWith(dateStr.substring(0, 7));
+      if (type === 'bulanan') return Boolean(s && s.tanggal && typeof s.tanggal === 'string' && s.tanggal.startsWith(dateStr.substring(0, 7)));
       return true;
     });
 
     const reportIncidents = incidents.filter((i) => {
       if (type === 'harian') return i.tanggal === dateStr;
-      if (type === 'bulanan') return i.tanggal.startsWith(dateStr.substring(0, 7));
+      if (type === 'bulanan') return Boolean(i && i.tanggal && typeof i.tanggal === 'string' && i.tanggal.startsWith(dateStr.substring(0, 7)));
       return true;
     });
 
     const reportLogbooks = logbooks.filter((l) => {
       if (type === 'harian') return l.tanggal === dateStr;
-      if (type === 'bulanan') return l.tanggal.startsWith(dateStr.substring(0, 7));
+      if (type === 'bulanan') return Boolean(l && l.tanggal && typeof l.tanggal === 'string' && l.tanggal.startsWith(dateStr.substring(0, 7)));
       return true;
     });
 
@@ -3205,7 +3248,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return snap;
   };
 
-  const resetToDemoData = () => {
+  const resetToCleanState = () => {
     setSchool(INITIAL_SCHOOL);
     setUsers(INITIAL_USERS);
     setPosts(INITIAL_POSTS);
@@ -3223,8 +3266,175 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     ['school', 'users', 'posts', 'shifts', 'schedules', 'attendances', 'logbooks', 'incidents', 'handovers', 'replacements', 'notifications', 'auditLogs', 'systemSettings'].forEach((k) => {
       localStorage.removeItem(STORAGE_PREFIX + k);
     });
+    localStorage.removeItem('epiket_users_list');
+    localStorage.removeItem('epiket_current_user');
+    localStorage.removeItem('epiket_auth_user_id');
 
-    recordAudit('RESET_DEMO_DATA', 'Sistem', 'Reset seluruh database ke data demo awal.');
+    recordAudit('RESET_CLEAN_COMMERCIAL', 'Sistem', 'Reset seluruh database ke kondisi awal komersil bersih tanpa data demo.');
+  };
+
+  const resetToDemoData = resetToCleanState;
+
+  const purgeAllDemoAndShadowData = async (): Promise<{ success: boolean; message: string; deletedCount: number }> => {
+    let totalDeleted = 0;
+    try {
+      const isDummyRecord = (id: string, data?: any) => {
+        if (id === 'user-kepsek') return true;
+        if (id.startsWith('user-ptk-') || id.startsWith('guru-') || id.startsWith('demo-') || id.startsWith('test-')) return true;
+        const nama = String(data?.nama || data?.userName || '');
+        const email = String(data?.email || '');
+        if (nama.includes('Ahmad Dahlan') || email.includes('kepsek@sekolah.sch.id')) return true;
+        if (data?.userId === 'user-kepsek' || String(data?.userId || '').startsWith('user-ptk-') || String(data?.userId || '').startsWith('guru-')) return true;
+        return false;
+      };
+
+      // 1. Purge dummy users from Firestore 'users' and 'user'
+      for (const colName of ['users', 'user']) {
+        try {
+          const snap = await getDocs(collection(db, colName));
+          const toDelete: string[] = [];
+          snap.forEach((d) => {
+            if (isDummyRecord(d.id, d.data())) {
+              toDelete.push(d.id);
+            }
+          });
+          if (toDelete.length > 0) {
+            totalDeleted += toDelete.length;
+            const CHUNK = 400;
+            for (let i = 0; i < toDelete.length; i += CHUNK) {
+              const b = writeBatch(db);
+              toDelete.slice(i, i + CHUNK).forEach((id) => b.delete(doc(db, colName, id)));
+              await b.commit();
+            }
+          }
+        } catch (e) {
+          console.warn(`Purge Firestore ${colName} error:`, e);
+        }
+      }
+
+      // 2. Purge dummy duty schedules from Firestore 'duty_schedules' and 'jadwal'
+      for (const colName of ['duty_schedules', 'jadwal']) {
+        try {
+          const snap = await getDocs(collection(db, colName));
+          const toDelete: string[] = [];
+          snap.forEach((d) => {
+            if (isDummyRecord(d.id, d.data())) {
+              toDelete.push(d.id);
+            }
+          });
+          if (toDelete.length > 0) {
+            totalDeleted += toDelete.length;
+            const CHUNK = 400;
+            for (let i = 0; i < toDelete.length; i += CHUNK) {
+              const b = writeBatch(db);
+              toDelete.slice(i, i + CHUNK).forEach((id) => b.delete(doc(db, colName, id)));
+              await b.commit();
+            }
+          }
+        } catch (e) {
+          console.warn(`Purge Firestore ${colName} error:`, e);
+        }
+      }
+
+      // 3. Purge dummy attendances, logbooks, incidents from Firestore
+      for (const colName of ['attendances', 'logbooks', 'bukuPiket', 'incidents', 'kejadian']) {
+        try {
+          const snap = await getDocs(collection(db, colName));
+          const toDelete: string[] = [];
+          snap.forEach((d) => {
+            if (isDummyRecord(d.id, d.data())) {
+              toDelete.push(d.id);
+            }
+          });
+          if (toDelete.length > 0) {
+            totalDeleted += toDelete.length;
+            const CHUNK = 400;
+            for (let i = 0; i < toDelete.length; i += CHUNK) {
+              const b = writeBatch(db);
+              toDelete.slice(i, i + CHUNK).forEach((id) => b.delete(doc(db, colName, id)));
+              await b.commit();
+            }
+          }
+        } catch (e) {
+          console.warn(`Purge Firestore ${colName} error:`, e);
+        }
+      }
+
+      // 4. Update school in Firestore if it has dummy kepsek
+      try {
+        const schoolDocRef = doc(db, 'schools', 'main');
+        const sSnap = await getDoc(schoolDocRef);
+        if (sSnap.exists()) {
+          const sData = sSnap.data() as School;
+          if (sData.kepalaSekolah?.includes('Ahmad Dahlan')) {
+            await updateDoc(schoolDocRef, {
+              kepalaSekolah: '',
+              nipKepsek: ''
+            });
+          }
+        }
+      } catch (e) {}
+
+      // 5. Clean local state & local storage
+      setUsers((prev) => {
+        const clean = prev.filter((u) => !isDummyRecord(u.id, u));
+        const finalUsers = clean.length > 0 ? clean : INITIAL_USERS;
+        saveToStorage('users', finalUsers);
+        localStorage.setItem('epiket_users_list', JSON.stringify(finalUsers));
+        return finalUsers;
+      });
+
+      setSchool((prev) => {
+        if (prev.kepalaSekolah?.includes('Ahmad Dahlan')) {
+          const clean = { ...prev, kepalaSekolah: '', nipKepsek: '' };
+          saveToStorage('school', clean);
+          return clean;
+        }
+        return prev;
+      });
+
+      setSchedules((prev) => {
+        const clean = prev.filter((s) => !isDummyRecord(s.id, s));
+        saveToStorage('schedules', clean);
+        return clean;
+      });
+
+      setAttendances((prev) => {
+        const clean = prev.filter((a) => !isDummyRecord(a.id, a));
+        saveToStorage('attendances', clean);
+        return clean;
+      });
+
+      setLogbooks((prev) => {
+        const clean = prev.filter((l) => !isDummyRecord(l.id, l));
+        saveToStorage('logbooks', clean);
+        return clean;
+      });
+
+      // Clear legacy storage keys
+      localStorage.removeItem('epiket_current_user');
+      localStorage.removeItem('epiket_auth_user_id');
+
+      recordAudit(
+        'PURGE_COMMERCIAL_DATA',
+        'Sistem',
+        `Pembersihan komersil selesai: ${totalDeleted} dokumen demo/bayangan dihapus permanen dari Firebase & memori lokal.`
+      );
+
+      sound.playSuccess();
+      return {
+        success: true,
+        message: `Berhasil membersihkan data komersil! ${totalDeleted} data demo/bayangan dihapus permanen dari Firebase.`,
+        deletedCount: totalDeleted
+      };
+    } catch (err: any) {
+      console.error('Gagal membersihkan data demo:', err);
+      return {
+        success: false,
+        message: err.message || 'Gagal membersihkan data demo dari Firebase.',
+        deletedCount: totalDeleted
+      };
+    }
   };
 
   return (
@@ -3300,7 +3510,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         markAllNotificationsAsRead,
         sendCustomWhatsApp,
         recordAudit,
+        resetToCleanState,
         resetToDemoData,
+        purgeAllDemoAndShadowData,
         snapshots,
         isRestoringSnapshot,
         isCreatingSnapshot,

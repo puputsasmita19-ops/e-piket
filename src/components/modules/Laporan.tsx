@@ -62,7 +62,7 @@ export const Laporan: React.FC = () => {
       if (reportType === 'harian') {
         dateMatch = s.tanggal === selectedDate;
       } else if (reportType === 'bulanan') {
-        dateMatch = s.tanggal.startsWith(selectedDate.substring(0, 7));
+        dateMatch = Boolean(s && s.tanggal && typeof s.tanggal === 'string' && s.tanggal.startsWith(selectedDate.substring(0, 7)));
       }
 
       const postMatch = selectedPost === 'all' || s.postId === selectedPost;
@@ -75,7 +75,7 @@ export const Laporan: React.FC = () => {
   const filteredIncidents = useMemo(() => {
     return incidents.filter((i) => {
       if (reportType === 'harian') return i.tanggal === selectedDate;
-      if (reportType === 'bulanan') return i.tanggal.startsWith(selectedDate.substring(0, 7));
+      if (reportType === 'bulanan') return Boolean(i && i.tanggal && typeof i.tanggal === 'string' && i.tanggal.startsWith(selectedDate.substring(0, 7)));
       return true;
     });
   }, [incidents, reportType, selectedDate]);
@@ -88,7 +88,7 @@ export const Laporan: React.FC = () => {
   // Monthly aggregated stats per teacher (for monthly view & export)
   const monthlyTeacherStats = useMemo(() => {
     const monthStr = selectedDate.substring(0, 7);
-    const monthSchs = schedules.filter((s) => s.tanggal.startsWith(monthStr));
+    const monthSchs = schedules.filter((s) => s && s.tanggal && typeof s.tanggal === 'string' && s.tanggal.startsWith(monthStr));
     return users
       .filter((u) => u.role === 'guru' || u.role === 'tendik')
       .map((u) => {
@@ -110,7 +110,7 @@ export const Laporan: React.FC = () => {
   // Monthly aggregated stats per post
   const monthlyPostStats = useMemo(() => {
     const monthStr = selectedDate.substring(0, 7);
-    const monthSchs = schedules.filter((s) => s.tanggal.startsWith(monthStr));
+    const monthSchs = schedules.filter((s) => s && s.tanggal && typeof s.tanggal === 'string' && s.tanggal.startsWith(monthStr));
     return posts.map((p) => {
       const postSchs = monthSchs.filter((s) => s.postId === p.id);
       const total = postSchs.length;
@@ -146,14 +146,14 @@ export const Laporan: React.FC = () => {
    */
   const handlePrintMonthlyPDF = () => {
     const monthStr = selectedDate.substring(0, 7);
-    const monthSchedules = schedules.filter((s) => s.tanggal.startsWith(monthStr) && (selectedPost === 'all' || s.postId === selectedPost) && (selectedUser === 'all' || s.userId === selectedUser));
-    const monthIncidents = incidents.filter((i) => i.tanggal.startsWith(monthStr));
-    const monthHandovers = handovers.filter((h) => h.tanggal.startsWith(monthStr));
+    const monthSchedules = schedules.filter((s) => s && s.tanggal && typeof s.tanggal === 'string' && s.tanggal.startsWith(monthStr) && (selectedPost === 'all' || s.postId === selectedPost) && (selectedUser === 'all' || s.userId === selectedUser));
+    const monthIncidents = incidents.filter((i) => i && i.tanggal && typeof i.tanggal === 'string' && i.tanggal.startsWith(monthStr));
+    const monthHandovers = handovers.filter((h) => h && h.tanggal && typeof h.tanggal === 'string' && h.tanggal.startsWith(monthStr));
 
     exportPicketMonthlyReportPDF(
       school,
       monthStr,
-      monthSchedules.length > 0 ? monthSchedules : schedules.filter((s) => s.tanggal.startsWith(monthStr)),
+      monthSchedules.length > 0 ? monthSchedules : schedules.filter((s) => s && s.tanggal && typeof s.tanggal === 'string' && s.tanggal.startsWith(monthStr)),
       attendances,
       monthIncidents,
       posts,

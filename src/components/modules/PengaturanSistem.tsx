@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, HardDrive, MapPin, ShieldCheck, Clock, Smartphone, Save, CheckCircle2, RefreshCw, Database, Cloud, Zap, ExternalLink, AlertCircle, Check, Flame, Bot, FolderSync, Sun, Moon, Palette, Eye, School as SchoolIcon, Upload, User, Users, Image as ImageIcon, Lock, ShieldAlert, Sliders, Volume2 } from 'lucide-react';
+import { Settings, HardDrive, MapPin, ShieldCheck, Clock, Smartphone, Save, CheckCircle2, RefreshCw, Database, Cloud, Zap, ExternalLink, AlertCircle, Check, Flame, Bot, FolderSync, Sun, Moon, Palette, Eye, School as SchoolIcon, Upload, User, Users, Image as ImageIcon, Lock, ShieldAlert, Sliders, Volume2, Trash2 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -17,8 +17,9 @@ import {
   CommercialFolderStructureResult 
 } from '../../services/driveService';
 import { extractDriveFolderId } from '../../services/googleDriveService';
-import { showSuccessToast } from '../../utils/toast';
+import { showSuccessToast, showErrorToast } from '../../utils/toast';
 import { AdminPanicModeModal } from '../modals/AdminPanicModeModal';
+import { ConfirmDeleteModal } from '../common/ConfirmDeleteModal';
 
 export const PengaturanSistem: React.FC = () => {
   const { isHapticEnabled, hapticIntensity, setHapticIntensity, toggleHaptic, haptic } = useHaptic();
@@ -28,6 +29,8 @@ export const PengaturanSistem: React.FC = () => {
     updateSystemSettings, 
     updateSchool, 
     resetToDemoData,
+    resetToCleanState,
+    purgeAllDemoAndShadowData,
     isFirestoreConnected,
     firestoreStatusMessage,
     syncAllDataToFirestore,
@@ -101,6 +104,27 @@ export const PengaturanSistem: React.FC = () => {
   // Photo Cache state
   const [showPhotoCacheModal, setShowPhotoCacheModal] = useState(false);
   const [showPanicModal, setShowPanicModal] = useState<boolean>(false);
+  const [showPurgeModal, setShowPurgeModal] = useState<boolean>(false);
+  const [isPurgingDemo, setIsPurgingDemo] = useState<boolean>(false);
+  const [purgeResult, setPurgeResult] = useState<string | null>(null);
+
+  const handlePurgeCommercial = async () => {
+    setIsPurgingDemo(true);
+    setShowPurgeModal(false);
+    try {
+      const res = await purgeAllDemoAndShadowData();
+      if (res.success) {
+        setPurgeResult(res.message);
+        showSuccessToast(res.message);
+      } else {
+        showErrorToast(res.message);
+      }
+    } catch (e: any) {
+      showErrorToast(e.message || 'Gagal membersihkan data demo.');
+    } finally {
+      setIsPurgingDemo(false);
+    }
+  };
   const [photoCacheStats, setPhotoCacheStats] = useState<{
     totalCachedPhotos: number;
     totalSizeBytes: number;
@@ -1050,7 +1074,7 @@ export const PengaturanSistem: React.FC = () => {
                 <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-1">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Database Cloud ID</span>
                   <p className="font-mono text-slate-900 dark:text-slate-100 font-bold break-all">
-                    ai-studio-336ecc13-2c88-4579-80d0-9b4b604d0208
+                    gen-lang-client-0402274970 (Default)
                   </p>
                 </div>
                 <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-1">
@@ -1093,6 +1117,45 @@ export const PengaturanSistem: React.FC = () => {
                   </span>
                 </div>
               </div>
+
+              {/* Commercial Production Clean Purge Card */}
+              <div className="p-4 sm:p-5 bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-950/20 dark:to-orange-950/20 rounded-2xl border-2 border-red-200 dark:border-red-900/40 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shadow-xs">
+                <div className="flex items-start sm:items-center gap-3.5">
+                  <div className="p-3 rounded-2xl bg-red-600/10 text-red-600 dark:text-red-400 border border-red-500/20 shrink-0">
+                    <ShieldCheck className="w-6 h-6 text-red-600 dark:text-red-400" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs sm:text-sm font-black text-red-900 dark:text-red-200 flex items-center gap-2">
+                      <span>🧹 Pembersihan Komersil: Hapus Semua Data Demo &amp; Bayangan</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-600 text-white font-mono font-bold">
+                        PRODUKSI KOMERSIL
+                      </span>
+                    </h4>
+                    <p className="text-[11px] sm:text-xs text-slate-600 dark:text-slate-300 mt-1 max-w-xl leading-relaxed">
+                      Menghapus seluruh akun dummy / bayangan (termasuk akun kepala sekolah demo, guru dummy, dan jadwal simulasi) secara permanen dari Firebase Firestore dan memori lokal agar aplikasi siap dipakai secara komersil.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="shrink-0 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowPurgeModal(true)}
+                    disabled={isPurgingDemo}
+                    className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-lg shadow-red-600/30 border border-red-500/30 transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    <Trash2 className="w-4 h-4 text-white" />
+                    <span>{isPurgingDemo ? 'Membersihkan Firebase...' : 'Bersihkan Data Demo Firebase'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {purgeResult && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 dark:bg-emerald-950/60 dark:border-emerald-800 rounded-xl text-xs text-emerald-800 dark:text-emerald-200 flex items-center gap-2 animate-in fade-in">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <span>{purgeResult}</span>
+                </div>
+              )}
 
               {/* Admin Panic Mode & Disaster Recovery Snapshot Card */}
               <div className="p-4 sm:p-5 bg-gradient-to-r from-rose-950/20 via-amber-950/15 to-slate-900/40 rounded-2xl border-2 border-rose-500/30 dark:border-rose-500/40 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shadow-sm">
@@ -1503,6 +1566,17 @@ export const PengaturanSistem: React.FC = () => {
       <AdminPanicModeModal
         isOpen={showPanicModal}
         onClose={() => setShowPanicModal(false)}
+      />
+
+      {/* CONFIRM PURGE COMMERCIAL DEMO DATA MODAL */}
+      <ConfirmDeleteModal
+        isOpen={showPurgeModal}
+        onClose={() => setShowPurgeModal(false)}
+        onConfirm={handlePurgeCommercial}
+        title="Bersihkan Semua Data Demo & Bayangan Firebase"
+        itemName="Akun Dummy, Kepsek Demo & Jadwal Simulasi"
+        itemDetails="Tindakan ini akan menghapus permanen seluruh data demo (user-kepsek/Dr. H. Ahmad Dahlan, guru dummy user-ptk-*, guru-*, data jadwal/logbook simulasi) dari Cloud Firebase dan IndexedDB lokal. Data asli sekolah Anda tidak akan terhapus."
+        requireTypingConfirmation={false}
       />
 
     </div>

@@ -152,7 +152,7 @@ export const JadwalPiket: React.FC = () => {
   const handleConfirmDeleteCurrentMonth = () => {
     const monthStr = String(calendarMonth + 1).padStart(2, '0');
     const prefix = `${calendarYear}-${monthStr}`;
-    const monthSchedules = schedules.filter((s) => s.tanggal.startsWith(prefix));
+    const monthSchedules = schedules.filter((s) => s && s.tanggal && typeof s.tanggal === 'string' && s.tanggal.startsWith(prefix));
     if (monthSchedules.length === 0) {
       return;
     }

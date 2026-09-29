@@ -144,7 +144,7 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
   // Bar Chart Data based on selected timeRange (Mingguan, Bulanan, Tahunan)
   const chartData = useMemo(() => {
     if (timeRange === 'mingguan') {
-      const sorted = [...mySchedules].sort((a, b) => a.tanggal.localeCompare(b.tanggal));
+      const sorted = [...mySchedules].sort((a, b) => (a?.tanggal || '').localeCompare(b?.tanggal || ''));
       const list = sorted.slice(-7);
       if (list.length === 0) {
         return ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'].map((d) => ({
@@ -198,7 +198,7 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
     }
 
     // Default: 'bulanan'
-    const sorted = [...mySchedules].sort((a, b) => a.tanggal.localeCompare(b.tanggal));
+    const sorted = [...mySchedules].sort((a, b) => (a?.tanggal || '').localeCompare(b?.tanggal || ''));
     const list = sorted.length > 0 ? sorted.slice(-10) : [];
 
     return list.map((sch) => {

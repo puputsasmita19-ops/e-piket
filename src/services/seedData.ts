@@ -17,57 +17,42 @@ import {
 
 export const INITIAL_SCHOOL: School = {
   id: 'sch-001',
-  npsn: '20104589',
-  nama: 'SMP Negeri 1 Nusantara',
-  alamat: 'Jl. Merdeka Pendidikan No. 45',
-  desaKelurahan: 'Gunung',
-  kecamatan: 'Kebayoran Baru',
-  kabupaten: 'Jakarta Selatan',
-  provinsi: 'DKI Jakarta',
-  email: 'info@sekolah.sch.id',
-  nomorTelepon: '(021) 7204589',
-  logo: 'https://images.unsplash.com/photo-1546410531-bb4caa6b424d?w=150&auto=format&fit=crop&q=80',
-  kepalaSekolah: 'Dr. H. Ahmad Dahlan, M.Pd.',
-  nipKepsek: '19720315 199802 1 004',
+  npsn: '',
+  nama: 'Sekolah Pengguna e-Piket',
+  alamat: 'Jl. Pendidikan Sekolah',
+  desaKelurahan: '',
+  kecamatan: '',
+  kabupaten: '',
+  provinsi: '',
+  email: '',
+  nomorTelepon: '',
+  logo: '',
+  kepalaSekolah: '',
+  nipKepsek: '',
   jamOperasionalMulai: '06:30',
   jamOperasionalSelesai: '16:30',
   toleransiKeterlambatanMenit: 15,
-  latitude: -6.229746,
-  longitude: 106.807493,
+  latitude: -6.2088,
+  longitude: 106.8456,
   radiusPresensiMeter: 250,
   aktif: true
 };
 
-// Baseline Official Personnel (Admin & Kepsek). User accounts can be added or imported cleanly by the school.
+// Clean Commercial Production Baseline Personnel (Admin account for initial setup)
 export const INITIAL_USERS: User[] = [
   {
     id: 'user-admin',
     username: 'admin',
     pin: '123456',
     password: 'password123',
-    nama: 'Administrator e-Piket',
-    email: 'admin@sekolah.sch.id',
-    nomorHP: '081234567801',
+    nama: 'Administrator Sekolah',
+    email: 'admin@sekolah.id',
+    nomorHP: '',
     role: 'admin',
-    nip: '19850612 201001 1 012',
-    nuptk: '4536763665200002',
-    jabatan: 'Koordinator IT & Administrator Sistem',
+    nip: '',
+    nuptk: '',
+    jabatan: 'Administrator Sistem e-Piket',
     unitKerja: 'Tata Usaha / IT',
-    statusAktif: true
-  },
-  {
-    id: 'user-kepsek',
-    username: 'kepsek',
-    pin: '123456',
-    password: 'password123',
-    nama: 'Dr. H. Ahmad Dahlan, M.Pd.',
-    email: 'kepsek@sekolah.sch.id',
-    nomorHP: '081234567802',
-    role: 'kepsek',
-    nip: '19720315 199802 1 004',
-    nuptk: '1238750652200013',
-    jabatan: 'Kepala Sekolah',
-    unitKerja: 'Pimpinan Sekolah',
     statusAktif: true
   }
 ];

@@ -304,9 +304,9 @@ export const exportPicketMonthlyReportPDF = (
   doc.text(`Dicetak Pada  : ${new Date().toLocaleString('id-ID')}`, 14, currentY + 19);
 
   // Filter schedules and incidents strictly for this month
-  const monthSchedules = schedules.filter((s) => s.tanggal.startsWith(monthStr));
-  const monthIncidents = incidents.filter((i) => i.tanggal.startsWith(monthStr));
-  const monthHandovers = handovers.filter((h) => h.tanggal.startsWith(monthStr));
+  const monthSchedules = schedules.filter((s) => s && s.tanggal && typeof s.tanggal === 'string' && s.tanggal.startsWith(monthStr));
+  const monthIncidents = incidents.filter((i) => i && i.tanggal && typeof i.tanggal === 'string' && i.tanggal.startsWith(monthStr));
+  const monthHandovers = handovers.filter((h) => h && h.tanggal && typeof h.tanggal === 'string' && h.tanggal.startsWith(monthStr));
 
   // Executive Monthly KPIs
   const totalSessions = monthSchedules.length;
@@ -523,7 +523,7 @@ export const exportPicketLogbookMonthlyPDF = (
   doc.text(`Dicetak Pada  : ${new Date().toLocaleString('id-ID')}`, 14, currentY + 18);
 
   // Filter logbooks for month
-  const monthLogs = logbooks.filter((l) => l.tanggal.startsWith(monthStr));
+  const monthLogs = logbooks.filter((l) => l && l.tanggal && typeof l.tanggal === 'string' && l.tanggal.startsWith(monthStr));
 
   // KPI Summary Strip
   const totalLogs = monthLogs.length;
@@ -606,15 +606,15 @@ export const exportPicketLogbookMonthlyPDF = (
 export const downloadUserImportTemplate = () => {
   const sampleData = [
     {
-      'Nama Lengkap': 'Drs. H. Ahmad Dahlan, M.Pd',
-      'Username': 'ahmad_dahlan',
+      'Nama Lengkap': 'Budi Santoso, S.Pd',
+      'Username': 'budisantoso',
       'Role (guru/tendik/kepsek/admin)': 'guru',
-      'NIP': '197508122005011003',
-      'NUPTK': '8451753655200002',
-      'Jabatan': 'Guru Bahasa Indonesia',
+      'NIP': '198501012010011001',
+      'NUPTK': '1234567890123456',
+      'Jabatan': 'Guru Mata Pelajaran',
       'Unit Kerja': 'Dewan Guru',
       'No WhatsApp': '081234567890',
-      'Email': 'ahmad.dahlan@sekolah.sch.id',
+      'Email': 'budi.santoso@sekolah.id',
       'PIN Masuk (6 Angka)': '123456',
       'Kata Sandi': 'password123',
       'Status Aktif (Aktif/Nonaktif)': 'Aktif'

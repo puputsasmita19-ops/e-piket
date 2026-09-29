@@ -68,10 +68,30 @@ export const MasterData: React.FC = () => {
     isFirestoreConnected,
     firestoreStatusMessage,
     syncAllDataToFirestore,
-    syncInitialMasterDataToFirestore
+    syncInitialMasterDataToFirestore,
+    purgeAllDemoAndShadowData
   } = useData();
 
   const [isSyncingFirebase, setIsSyncingFirebase] = useState(false);
+  const [isPurgingDemo, setIsPurgingDemo] = useState(false);
+  const [showPurgeConfirmModal, setShowPurgeConfirmModal] = useState(false);
+
+  const handlePurgeCommercialDemoData = async () => {
+    setIsPurgingDemo(true);
+    setShowPurgeConfirmModal(false);
+    try {
+      const res = await purgeAllDemoAndShadowData();
+      if (res.success) {
+        showSuccessToast(res.message);
+      } else {
+        showErrorToast(res.message);
+      }
+    } catch (e: any) {
+      showErrorToast(e.message || 'Gagal membersihkan data demo.');
+    } finally {
+      setIsPurgingDemo(false);
+    }
+  };
 
   const handleSyncFirebase = async (initialOnly: boolean = false) => {
     setIsSyncingFirebase(true);
@@ -642,7 +662,18 @@ export const MasterData: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowPurgeConfirmModal(true)}
+            disabled={isPurgingDemo}
+            className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 font-bold rounded-xl text-xs flex items-center gap-1.5 transition active:scale-95 shadow-xs cursor-pointer disabled:opacity-50"
+            title="Hapus semua data demo guru, kepsek dummy, dan jadwal bayangan di Firebase"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+            <span>{isPurgingDemo ? 'Membersihkan Firebase...' : 'Bersihkan Data Demo Firebase'}</span>
+          </button>
+
           <div className="px-3.5 py-2 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 font-bold rounded-xl text-xs flex items-center gap-2 shadow-xs">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
             <span>Realtime Database Otomatis</span>
@@ -1938,6 +1969,17 @@ export const MasterData: React.FC = () => {
         itemName={deleteModalState.itemName}
         itemDetails={deleteModalState.itemDetails}
         requireTypingConfirmation={deleteModalState.requireTypingConfirmation}
+      />
+
+      {/* CONFIRM PURGE COMMERCIAL DEMO DATA MODAL */}
+      <ConfirmDeleteModal
+        isOpen={showPurgeConfirmModal}
+        onClose={() => setShowPurgeConfirmModal(false)}
+        onConfirm={handlePurgeCommercialDemoData}
+        title="Bersihkan Semua Data Demo & Bayangan Firebase"
+        itemName="Seluruh Akun Dummy & Data Simulasi"
+        itemDetails="Sistem akan menghapus seluruh data guru demo, akun bayangan (user-kepsek/Dr. H. Ahmad Dahlan, user-ptk-*, guru-*), jadwal demo, dan logbook simulasi dari Firebase Firestore dan penyimpanan lokal. Data asli sekolah tidak akan terhapus."
+        requireTypingConfirmation={false}
       />
 
       {/* IMPORT MASTER DATA MODAL */}

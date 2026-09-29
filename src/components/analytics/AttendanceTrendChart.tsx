@@ -73,11 +73,12 @@ export const AttendanceTrendChart: React.FC<AttendanceTrendChartProps> = ({
 
   // 1. Daily Attendance Trend Data for selected month
   const dailyTrendData = useMemo(() => {
-    const monthSchedules = schedules.filter((s) => s.tanggal.startsWith(selectedMonth));
+    const monthSchedules = schedules.filter((s) => s && s.tanggal && typeof s.tanggal === 'string' && s.tanggal.startsWith(selectedMonth));
     
     const dateMap: { [date: string]: { total: number; tepatWaktu: number; terlambat: number; belumHadir: number } } = {};
     
     monthSchedules.forEach((s) => {
+      if (!s.tanggal) return;
       if (!dateMap[s.tanggal]) {
         dateMap[s.tanggal] = { total: 0, tepatWaktu: 0, terlambat: 0, belumHadir: 0 };
       }
@@ -94,7 +95,7 @@ export const AttendanceTrendChart: React.FC<AttendanceTrendChartProps> = ({
     const dates = Object.keys(dateMap).sort();
     return dates.map((date) => {
       const d = dateMap[date];
-      const dayNum = date.split('-')[2];
+      const dayNum = date && date.includes('-') ? date.split('-')[2] : '01';
       const disciplineRate = d.total > 0 ? Math.round(((d.tepatWaktu) / d.total) * 100) : 100;
       return {
         date,
@@ -114,7 +115,7 @@ export const AttendanceTrendChart: React.FC<AttendanceTrendChartProps> = ({
     const monthMap: { [m: string]: { total: number; hadir: number; terlambat: number; digantikan: number } } = {};
 
     schedules.forEach((s) => {
-      const m = s.tanggal ? s.tanggal.substring(0, 7) : selectedMonth;
+      const m = s && s.tanggal && typeof s.tanggal === 'string' ? s.tanggal.substring(0, 7) : selectedMonth;
       if (!monthMap[m]) {
         monthMap[m] = { total: 0, hadir: 0, terlambat: 0, digantikan: 0 };
       }
@@ -148,7 +149,7 @@ export const AttendanceTrendChart: React.FC<AttendanceTrendChartProps> = ({
 
   // 3. Daily Incidents Trend Data
   const dailyIncidentData = useMemo(() => {
-    const monthIncidents = incidents.filter((i) => i.tanggal.startsWith(selectedMonth));
+    const monthIncidents = incidents.filter((i) => i && i.tanggal && typeof i.tanggal === 'string' && i.tanggal.startsWith(selectedMonth));
     const dateMap: {
       [date: string]: {
         total: number;
@@ -164,6 +165,7 @@ export const AttendanceTrendChart: React.FC<AttendanceTrendChartProps> = ({
     } = {};
 
     monthIncidents.forEach((inc) => {
+      if (!inc.tanggal) return;
       if (!dateMap[inc.tanggal]) {
         dateMap[inc.tanggal] = {
           total: 0,
@@ -198,7 +200,7 @@ export const AttendanceTrendChart: React.FC<AttendanceTrendChartProps> = ({
     const dates = Object.keys(dateMap).sort();
     return dates.map((date) => {
       const d = dateMap[date];
-      const dayNum = date.split('-')[2];
+      const dayNum = date && date.includes('-') ? date.split('-')[2] : '01';
       return {
         date,
         shortDate: `Tgl ${dayNum}`,
@@ -217,7 +219,7 @@ export const AttendanceTrendChart: React.FC<AttendanceTrendChartProps> = ({
 
   // 4. Logbook Summary Data per Post & Date
   const logbookSummaryData = useMemo(() => {
-    const monthLogs = logbooks.filter((l) => l.tanggal.startsWith(selectedMonth));
+    const monthLogs = logbooks.filter((l) => l && l.tanggal && typeof l.tanggal === 'string' && l.tanggal.startsWith(selectedMonth));
     
     return posts.map((post) => {
       const pLogs = monthLogs.filter((l) => l.postId === post.id);
@@ -241,7 +243,7 @@ export const AttendanceTrendChart: React.FC<AttendanceTrendChartProps> = ({
 
   // 5. Post Comparison Data for attendance
   const postComparisonData = useMemo(() => {
-    const monthSchedules = schedules.filter((s) => s.tanggal.startsWith(selectedMonth));
+    const monthSchedules = schedules.filter((s) => s && s.tanggal && typeof s.tanggal === 'string' && s.tanggal.startsWith(selectedMonth));
     
     return posts.map((post) => {
       const pSchedules = monthSchedules.filter((s) => s.postId === post.id);
@@ -263,9 +265,9 @@ export const AttendanceTrendChart: React.FC<AttendanceTrendChartProps> = ({
 
   // Monthly KPIs
   const monthlyStats = useMemo(() => {
-    const monthSchedules = schedules.filter((s) => s.tanggal.startsWith(selectedMonth));
-    const monthIncidents = incidents.filter((i) => i.tanggal.startsWith(selectedMonth));
-    const monthLogs = logbooks.filter((l) => l.tanggal.startsWith(selectedMonth));
+    const monthSchedules = schedules.filter((s) => s && s.tanggal && typeof s.tanggal === 'string' && s.tanggal.startsWith(selectedMonth));
+    const monthIncidents = incidents.filter((i) => i && i.tanggal && typeof i.tanggal === 'string' && i.tanggal.startsWith(selectedMonth));
+    const monthLogs = logbooks.filter((l) => l && l.tanggal && typeof l.tanggal === 'string' && l.tanggal.startsWith(selectedMonth));
 
     const total = monthSchedules.length;
     const tepatWaktu = monthSchedules.filter((s) => s.status === 'sedang_bertugas' || s.status === 'sudah_checkout').length;

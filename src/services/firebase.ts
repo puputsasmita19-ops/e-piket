@@ -35,16 +35,18 @@ const firebaseConfig = {
 export const app: FirebaseApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
 // The canonical database ID for this AI Studio project
-export const FIRESTORE_DATABASE_ID = (firebaseConfigData as any).firestoreDatabaseId || 'ai-studio-336ecc13-2c88-4579-80d0-9b4b604d0208';
+export const FIRESTORE_DATABASE_ID: string | undefined = (firebaseConfigData as any).firestoreDatabaseId || undefined;
 
-// Initialize Firestore with specific databaseId and safe ignoreUndefinedProperties setting
+// Initialize Firestore with specific databaseId (if specified) and safe ignoreUndefinedProperties setting
 let firestoreInstance: Firestore;
 try {
-  firestoreInstance = initializeFirestore(app, {
-    ignoreUndefinedProperties: true,
-  }, FIRESTORE_DATABASE_ID);
+  firestoreInstance = FIRESTORE_DATABASE_ID
+    ? initializeFirestore(app, { ignoreUndefinedProperties: true }, FIRESTORE_DATABASE_ID)
+    : initializeFirestore(app, { ignoreUndefinedProperties: true });
 } catch {
-  firestoreInstance = getFirestore(app, FIRESTORE_DATABASE_ID);
+  firestoreInstance = FIRESTORE_DATABASE_ID
+    ? getFirestore(app, FIRESTORE_DATABASE_ID)
+    : getFirestore(app);
 }
 
 export const db: Firestore = firestoreInstance;
