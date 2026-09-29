@@ -134,6 +134,7 @@ interface DataContextType {
   ) => Promise<{ success: boolean; message: string }>;
   
   // Schedules CRUD
+  acknowledgeTeacherSchedule: (scheduleId: string) => Promise<void>;
   createSchedule: (schedule: Omit<DutySchedule, 'id' | 'createdAt'>) => Promise<DutySchedule>;
   updateSchedule: (id: string, data: Partial<DutySchedule>) => Promise<void>;
   deleteSchedule: (id: string) => Promise<void>;
@@ -1712,6 +1713,31 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   };
 
+  const acknowledgeTeacherSchedule = async (scheduleId: string) => {
+    const nowIso = new Date().toISOString();
+    setSchedules((prev) =>
+      prev.map((s) =>
+        s.id === scheduleId
+          ? { ...s, acknowledgedByTeacher: true, teacherAckAt: nowIso, updatedAt: nowIso }
+          : s
+      )
+    );
+
+    if (isOnline) {
+      try {
+        await Promise.all([
+          setDoc(doc(db, 'jadwal', scheduleId), { acknowledgedByTeacher: true, teacherAckAt: nowIso, updatedAt: nowIso }, { merge: true }),
+          setDoc(doc(db, 'duty_schedules', scheduleId), { acknowledgedByTeacher: true, teacherAckAt: nowIso, updatedAt: nowIso }, { merge: true })
+        ]);
+      } catch (e) {
+        console.warn('Could not acknowledge schedule in Firestore:', e);
+      }
+    }
+
+    sound.playSuccess();
+    recordAudit('ACKNOWLEDGE_TEACHER_DUTY', 'Jadwal Piket', `Guru telah mengonfirmasi terima tugas piket ID: ${scheduleId}`, scheduleId);
+  };
+
   const createSchedule = async (schedule: Omit<DutySchedule, 'id' | 'createdAt'>): Promise<DutySchedule> => {
     const newSch: DutySchedule = {
       ...schedule,
@@ -1720,12 +1746,34 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     setSchedules((prev) => [newSch, ...prev]);
 
+    // Send instant real-time notification to the assigned teacher
+    const isDadakan = Boolean(newSch.isDadakan);
+    const newNotif: NotificationItem = {
+      id: `notif-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      userId: newSch.userId,
+      type: isDadakan ? 'jadwal_dadakan' : 'instruksi_piket',
+      title: isDadakan ? '🚨 INSTRUKSI PIKET DADAKAN!' : '📅 Instruksi Jadwal Piket Baru',
+      message: `${newSch.userName}, Anda ditugaskan piket di ${newSch.postName || 'Pos Piket'} (${newSch.shiftName || 'Shift'} ${newSch.jamMulai || ''}-${newSch.jamSelesai || ''} WIB) tanggal ${newSch.tanggal}. Mohon segera konfirmasi Terima Tugas atau Ajukan Pengganti jika berhalangan.`,
+      read: false,
+      createdAt: new Date().toISOString()
+    };
+    setNotifications((prev) => [newNotif, ...prev]);
+
+    // Dispatch system & service worker background push notification
+    notificationService.sendNotification(newNotif.title, {
+      body: newNotif.message,
+      tag: `schedule-${newSch.id}-${Date.now()}`,
+      requireInteraction: true
+    });
+
     if (isOnline) {
       try {
         const cleaned = cleanFirestoreData(newSch);
+        const cleanedNotif = cleanFirestoreData(newNotif);
         await Promise.all([
           setDoc(doc(db, 'jadwal', newSch.id), cleaned),
-          setDoc(doc(db, 'duty_schedules', newSch.id), cleaned)
+          setDoc(doc(db, 'duty_schedules', newSch.id), cleaned),
+          setDoc(doc(db, 'notifications', newNotif.id), cleanedNotif)
         ]);
       } catch (e) {
         console.warn('Could not sync schedule to Firestore:', e);
@@ -3224,6 +3272,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateReplacement,
         deleteReplacement,
         adminManualCheckIn,
+        acknowledgeTeacherSchedule,
         createSchedule,
         updateSchedule,
         deleteSchedule,

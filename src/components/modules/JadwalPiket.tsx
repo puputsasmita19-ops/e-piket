@@ -92,6 +92,7 @@ export const JadwalPiket: React.FC = () => {
   const [formShiftId, setFormShiftId] = useState(shifts[0]?.id || '');
   const [formUserId, setFormUserId] = useState(users[0]?.id || '');
   const [formNotes, setFormNotes] = useState('');
+  const [formIsDadakan, setFormIsDadakan] = useState(false);
   const [conflictWarning, setConflictWarning] = useState<string | null>(null);
 
   // Batch Multi-Person Form State
@@ -216,6 +217,7 @@ export const JadwalPiket: React.FC = () => {
     setFormShiftId(shifts[0]?.id || '');
     setFormUserId(users[0]?.id || '');
     setFormNotes('');
+    setFormIsDadakan(false);
     setConflictWarning(null);
     setShowAddModal(true);
   };
@@ -227,6 +229,7 @@ export const JadwalPiket: React.FC = () => {
     setFormShiftId(sch.shiftId);
     setFormUserId(sch.userId);
     setFormNotes(sch.notes || '');
+    setFormIsDadakan(Boolean(sch.isDadakan));
     setConflictWarning(null);
     setShowAddModal(true);
   };
@@ -251,6 +254,7 @@ export const JadwalPiket: React.FC = () => {
           userId: userObj.id,
           userName: userObj.nama,
           userRole: userObj.role,
+          isDadakan: formIsDadakan,
           notes: formNotes
         });
       } else {
@@ -268,6 +272,8 @@ export const JadwalPiket: React.FC = () => {
           userName: userObj.nama,
           userRole: userObj.role,
           status: 'belum_checkin',
+          isDadakan: formIsDadakan,
+          acknowledgedByTeacher: false,
           notes: formNotes
         });
       }
@@ -276,11 +282,14 @@ export const JadwalPiket: React.FC = () => {
       showSuccessToast(
         editingScheduleId
           ? `Perubahan jadwal piket ${userObj.nama} berhasil disimpan!`
+          : formIsDadakan
+          ? `🚨 Jadwal piket dadakan untuk ${userObj.nama} berhasil diterbitkan & dinotifikasikan!`
           : `Jadwal piket untuk ${userObj.nama} berhasil disimpan!`
       );
       setShowAddModal(false);
       setEditingScheduleId(null);
       setFormNotes('');
+      setFormIsDadakan(false);
     }
   };
 
@@ -1112,6 +1121,25 @@ export const JadwalPiket: React.FC = () => {
                   placeholder="Contoh: Fokus sambut siswa 5S dan penyeberangan"
                   className="w-full text-xs p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl"
                 />
+              </div>
+
+              <div>
+                <label className="flex items-start gap-2.5 p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 cursor-pointer transition hover:bg-amber-100/70 dark:hover:bg-amber-950/60">
+                  <input
+                    type="checkbox"
+                    checked={formIsDadakan}
+                    onChange={(e) => setFormIsDadakan(e.target.checked)}
+                    className="mt-0.5 rounded text-amber-600 focus:ring-amber-500 w-4 h-4 cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-amber-900 dark:text-amber-200 block">
+                      🚨 Tandai sebagai Jadwal Piket Dadakan / Instruksi Cepat
+                    </span>
+                    <span className="text-[11px] text-amber-700 dark:text-amber-400 block mt-0.5 leading-snug">
+                      Guru yang ditugaskan akan langsung menerima pengumuman darurat real-time di dashboard &amp; notifikasi instan untuk konfirmasi terima atau ajukan pengganti.
+                    </span>
+                  </div>
+                </label>
               </div>
 
               <div className="flex flex-col sm:flex-row gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">

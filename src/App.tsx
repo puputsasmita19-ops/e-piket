@@ -20,6 +20,7 @@ import { ScrollToTopButton } from './components/common/ScrollToTopButton';
 import { GuidedTour } from './components/common/GuidedTour';
 import { PullToRefresh } from './components/common/PullToRefresh';
 import { notificationService } from './services/notificationService';
+import { fcmService } from './services/fcmService';
 import { antiFraudService } from './services/antiFraudService';
 import { initGlobalHapticFeedback } from './utils/feedback';
 import { showSuccessToast } from './utils/toast';
@@ -286,6 +287,15 @@ const MainLayout: React.FC = () => {
       notificationService.stopScheduler();
     };
   }, [isAuthenticated, schedules, currentUser?.id, currentRole]);
+
+  // Initialize Firebase Cloud Messaging (FCM) & Service Worker on authentication
+  useEffect(() => {
+    if (isAuthenticated && currentUser?.id) {
+      fcmService.initialize(currentUser.id).catch((err) => {
+        console.warn('FCM auto-init error:', err);
+      });
+    }
+  }, [isAuthenticated, currentUser?.id]);
 
 
 

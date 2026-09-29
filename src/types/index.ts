@@ -116,6 +116,9 @@ export interface DutySchedule {
   userName?: string;
   userRole?: UserRole;
   status: ScheduleStatus;
+  isDadakan?: boolean;
+  acknowledgedByTeacher?: boolean;
+  teacherAckAt?: string;
   isReplacement?: boolean;
   originalUserId?: string;
   originalUserName?: string;
@@ -286,7 +289,7 @@ export interface NotificationItem {
   id: string;
   userId?: string; // target user or undefined for all
   roleTarget?: UserRole | 'all';
-  type: 'jadwal_hari_ini' | 'jadwal_besok' | 'terlambat' | 'penggantian' | 'serah_terima' | 'kejadian_penting' | 'sistem';
+  type: 'jadwal_hari_ini' | 'jadwal_besok' | 'jadwal_dadakan' | 'instruksi_piket' | 'terlambat' | 'penggantian' | 'serah_terima' | 'kejadian_penting' | 'sistem';
   title: string;
   message: string;
   linkUrl?: string;

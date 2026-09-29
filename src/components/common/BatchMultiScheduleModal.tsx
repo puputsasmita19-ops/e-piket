@@ -25,6 +25,7 @@ export const BatchMultiScheduleModal: React.FC<BatchMultiScheduleModalProps> = (
   const [batchRoleFilter, setBatchRoleFilter] = useState<'all' | 'guru' | 'tendik' | 'kepsek'>('all');
   const [batchTeacherSearch, setBatchTeacherSearch] = useState<string>('');
   const [batchNotes, setBatchNotes] = useState<string>('');
+  const [batchIsDadakan, setBatchIsDadakan] = useState<boolean>(false);
   const [batchSubmitting, setBatchSubmitting] = useState<boolean>(false);
 
   // Recurring options state
@@ -150,7 +151,9 @@ export const BatchMultiScheduleModal: React.FC<BatchMultiScheduleModalProps> = (
               userName: userObj.nama,
               userRole: userObj.role,
               status: 'belum_checkin',
-              notes: batchNotes || `Penugasan piket ${repeatMode === 'mingguan' ? `berulang (${repeatWeeks} Mgg)` : 'kelompok'}`
+              isDadakan: batchIsDadakan,
+              acknowledgedByTeacher: false,
+              notes: batchNotes || `Penugasan piket ${repeatMode === 'mingguan' ? `berulang (${repeatWeeks} Mgg)` : 'kelompok'}${batchIsDadakan ? ' (Piket Dadakan)' : ''}`
             });
             createdCount++;
           } else {
@@ -588,6 +591,26 @@ export const BatchMultiScheduleModal: React.FC<BatchMultiScheduleModalProps> = (
               placeholder="Contoh: Petugas kelompok piket penyambutan siswa &amp; penegakan disiplin"
               className="w-full text-xs p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl"
             />
+          </div>
+
+          {/* Dadakan Toggle */}
+          <div>
+            <label className="flex items-start gap-2.5 p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 cursor-pointer transition hover:bg-amber-100/70 dark:hover:bg-amber-950/60">
+              <input
+                type="checkbox"
+                checked={batchIsDadakan}
+                onChange={(e) => setBatchIsDadakan(e.target.checked)}
+                className="mt-0.5 rounded text-amber-600 focus:ring-amber-500 w-4 h-4 cursor-pointer"
+              />
+              <div>
+                <span className="text-xs font-bold text-amber-900 dark:text-amber-200 block">
+                  🚨 Tandai sebagai Tugas Piket Dadakan / Instruksi Cepat
+                </span>
+                <span className="text-[11px] text-amber-700 dark:text-amber-400 block mt-0.5 leading-snug">
+                  Semua guru terpilih akan menerima notifikasi prioritas darurat di dashboard untuk segera konfirmasi terima atau ajukan pengganti.
+                </span>
+              </div>
+            </label>
           </div>
 
           {/* Submit Action */}

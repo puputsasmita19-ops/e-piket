@@ -38,6 +38,7 @@ import { RunningText } from '../common/RunningText';
 import { PiketInstanWidget } from '../common/PiketInstanWidget';
 import { PetaLokasiMap } from '../common/PetaLokasiMap';
 import { PiketReminderNotification } from '../common/PiketReminderNotification';
+import { InstruksiPiketDadakanBanner } from '../common/InstruksiPiketDadakanBanner';
 
 interface GuruDashboardProps {
   setActiveTab: (tab: string) => void;
@@ -272,6 +273,12 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
           </div>
         </div>
       </div>
+
+      {/* REAL-TIME DUTY INSTRUCTION & DADAKAN ALERT BANNER */}
+      <InstruksiPiketDadakanBanner />
+
+      {/* FIREBASE CLOUD MESSAGING (FCM) BACKGROUND PUSH NOTIFICATION BANNER */}
+      <PiketReminderNotification />
 
       {/* ONE-TAP INSTANT CHECK-IN WIDGET */}
       <PiketInstanWidget />

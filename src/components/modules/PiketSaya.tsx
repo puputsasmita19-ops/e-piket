@@ -10,6 +10,7 @@ import { GpsValidationResult } from '../../services/gpsService';
 import { biometricService } from '../../services/biometricService';
 import { notificationService } from '../../services/notificationService';
 import { showErrorToast } from '../../utils/toast';
+import { InstruksiPiketDadakanBanner } from '../common/InstruksiPiketDadakanBanner';
 
 export const PiketSaya: React.FC = () => {
   const { currentUser } = useAuth();
@@ -94,6 +95,9 @@ export const PiketSaya: React.FC = () => {
           </p>
         </div>
       </div>
+
+      {/* REAL-TIME DUTY INSTRUCTION & DADAKAN ALERT BANNER */}
+      <InstruksiPiketDadakanBanner />
 
       {/* GPS LIVE LOCATION VALIDATOR CARD */}
       <GpsLocationValidatorCard 
