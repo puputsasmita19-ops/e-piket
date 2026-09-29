@@ -52,6 +52,7 @@ const ModuleLoadingFallback = () => (
 );
 
 const VALID_TABS = [
+  'login',
   'dashboard',
   'piket-saya',
   'buku-piket',
@@ -111,7 +112,7 @@ const getStoredTab = (role?: string | null): string => {
   } catch (e) {
     console.warn('Storage/hash error:', e);
   }
-  return 'dashboard';
+  return 'login';
 };
 
 const MainLayout: React.FC = () => {
@@ -199,10 +200,10 @@ const MainLayout: React.FC = () => {
     } catch (e) {}
   }, [activeTab]);
 
-  // Safeguard: redirect to dashboard if current tab is restricted for user's role
+  // Safeguard: redirect to login if current tab is restricted for user's role
   useEffect(() => {
     if (currentRole && !isTabAllowedForRole(activeTab, currentRole)) {
-      setActiveTab('dashboard');
+      setActiveTab('login');
     }
   }, [currentRole, activeTab, setActiveTab]);
 
@@ -359,6 +360,7 @@ const MainLayout: React.FC = () => {
   // Render view based on activeTab & RBAC
   const renderContent = () => {
     switch (activeTab) {
+      case 'login':
       case 'dashboard':
         if (currentRole === 'admin') {
           return <AdminDashboard setActiveTab={setActiveTab} onOpenAISummary={() => setShowAISummary(true)} />;

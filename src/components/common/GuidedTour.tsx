@@ -24,9 +24,9 @@ export const GuidedTour: React.FC<GuidedTourProps> = ({ onComplete }) => {
   const tourSteps = [
     {
       icon: <LayoutDashboard className="w-8 h-8 text-emerald-500" />,
-      title: 'Dashboard & Presensi Piket Instan',
+      title: 'Login & Presensi Piket Instan',
       subtitle: 'Ringkasan Tugas & Performa Harian',
-      description: 'Di halaman Dashboard, Anda dapat melihat jadwal piket hari ini, grafik statistik jam kerja, serta melakukan Presensi Piket Instan satu sentuhan saat berada di lokasi sekolah.',
+      description: 'Di halaman Login, Anda dapat melihat jadwal piket hari ini, grafik statistik jam kerja, serta melakukan Presensi Piket Instan satu sentuhan saat berada di lokasi sekolah.',
       badge: 'Langkah 1 dari 3'
     },
     {

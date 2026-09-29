@@ -16,7 +16,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, setActiveTab })
   const isAdminOrKepsek = currentRole === 'admin' || currentRole === 'kepsek';
 
   const mainNavItems = [
-    { id: 'dashboard', label: 'Beranda', icon: LayoutDashboard },
+    { id: 'login', label: 'Login', icon: LayoutDashboard },
     { 
       id: isAdminOrKepsek ? 'jadwal' : 'piket-saya', 
       label: isAdminOrKepsek ? 'Jadwal' : 'Piket Saya', 
