@@ -194,7 +194,11 @@ const STORAGE_PREFIX = 'epiket_db_';
 const loadInitial = <T,>(key: string, fallback: T): T => {
   try {
     const saved = localStorage.getItem(STORAGE_PREFIX + key);
-    return saved ? JSON.parse(saved) : fallback;
+    if (!saved || saved === 'null' || saved === 'undefined' || saved.trim() === '') {
+      return fallback;
+    }
+    const parsed = JSON.parse(saved);
+    return parsed !== null && parsed !== undefined ? parsed : fallback;
   } catch {
     return fallback;
   }

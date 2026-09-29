@@ -215,10 +215,29 @@ export const MasterData: React.FC = () => {
     statusAktif: true
   });
 
-  const [schoolForm, setSchoolForm] = useState<School>(school);
+  const [schoolForm, setSchoolForm] = useState<School>(() => school || {
+    id: 'sch-001',
+    nama: 'Sekolah Pengguna e-Piket',
+    npsn: '',
+    alamat: 'Jl. Pendidikan Sekolah',
+    email: '',
+    nomorTelepon: '',
+    logo: '',
+    kepalaSekolah: '',
+    nipKepsek: '',
+    jamOperasionalMulai: '06:30',
+    jamOperasionalSelesai: '16:30',
+    toleransiKeterlambatanMenit: 15,
+    latitude: -6.2088,
+    longitude: 106.8456,
+    radiusPresensiMeter: 250,
+    aktif: true
+  });
 
   useEffect(() => {
-    setSchoolForm(school);
+    if (school) {
+      setSchoolForm(school);
+    }
   }, [school]);
 
   // -------------------------------------------------------------

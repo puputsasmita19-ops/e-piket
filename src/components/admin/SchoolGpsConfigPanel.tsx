@@ -41,17 +41,17 @@ export const SchoolGpsConfigPanel: React.FC<SchoolGpsConfigPanelProps> = ({
 }) => {
   const { currentUser } = useAuth();
 
-  const [lat, setLat] = useState<number>(school.latitude || -6.229746);
-  const [lng, setLng] = useState<number>(school.longitude || 106.807493);
-  const [radius, setRadius] = useState<number>(school.radiusPresensiMeter || 250);
-  const [isLocked, setIsLocked] = useState<boolean>(Boolean(school.isGpsLocked));
-  const [lockedAt, setLockedAt] = useState<string | undefined>(school.gpsLockedAt);
-  const [lockedBy, setLockedBy] = useState<string | undefined>(school.gpsLockedBy);
+  const [lat, setLat] = useState<number>(school?.latitude || -6.229746);
+  const [lng, setLng] = useState<number>(school?.longitude || 106.807493);
+  const [radius, setRadius] = useState<number>(school?.radiusPresensiMeter || 250);
+  const [isLocked, setIsLocked] = useState<boolean>(Boolean(school?.isGpsLocked));
+  const [lockedAt, setLockedAt] = useState<string | undefined>(school?.gpsLockedAt);
+  const [lockedBy, setLockedBy] = useState<string | undefined>(school?.gpsLockedBy);
 
   const [detectingGps, setDetectingGps] = useState(false);
   const [detectingStep, setDetectingStep] = useState<string>('');
-  const [detectedAccuracy, setDetectedAccuracy] = useState<number | null>(school.gpsAccuracyMeters || null);
-  const [lastAutoDetectAt, setLastAutoDetectAt] = useState<string | undefined>(school.gpsAutoDetectedAt);
+  const [detectedAccuracy, setDetectedAccuracy] = useState<number | null>(school?.gpsAccuracyMeters || null);
+  const [lastAutoDetectAt, setLastAutoDetectAt] = useState<string | undefined>(school?.gpsAutoDetectedAt);
 
   const [testingDistance, setTestingDistance] = useState(false);
   const [testedDistance, setTestedDistance] = useState<number | null>(null);
@@ -63,6 +63,7 @@ export const SchoolGpsConfigPanel: React.FC<SchoolGpsConfigPanelProps> = ({
 
   // Sync internal state whenever parent school changes
   useEffect(() => {
+    if (!school) return;
     if (school.latitude !== undefined) setLat(school.latitude);
     if (school.longitude !== undefined) setLng(school.longitude);
     if (school.radiusPresensiMeter !== undefined) setRadius(school.radiusPresensiMeter);

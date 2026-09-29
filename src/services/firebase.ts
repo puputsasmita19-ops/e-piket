@@ -17,7 +17,8 @@ import {
   limit, 
   serverTimestamp, 
   writeBatch,
-  getDocFromServer
+  getDocFromServer,
+  enableMultiTabIndexedDbPersistence
 } from 'firebase/firestore';
 import { getAuth, Auth } from 'firebase/auth';
 import firebaseConfigData from '../../firebase-applet-config.json';
@@ -35,7 +36,7 @@ const firebaseConfig = {
 export const app: FirebaseApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
 // The canonical database ID for this AI Studio project
-export const FIRESTORE_DATABASE_ID: string = (firebaseConfigData as any).firestoreDatabaseId || 'ai-studio-336ecc13-2c88-4579-80d0-9b4b604d0208';
+export const FIRESTORE_DATABASE_ID: string | undefined = (firebaseConfigData as any).firestoreDatabaseId || undefined;
 
 // Initialize Firestore with specific databaseId (if specified) and safe ignoreUndefinedProperties setting
 let firestoreInstance: Firestore;
@@ -50,6 +51,13 @@ try {
 }
 
 export const db: Firestore = firestoreInstance;
+
+// Enable multi-tab IndexedDB offline persistence safely
+if (typeof window !== 'undefined') {
+  enableMultiTabIndexedDbPersistence(db).catch((err) => {
+    console.warn('Firestore multi-tab persistence could not be enabled:', err.message);
+  });
+}
 
 /**
  * Standard collection names based on the Firestore schema requirement:
@@ -141,15 +149,26 @@ export async function testFirestoreConnection(): Promise<{ connected: boolean; m
     await getDocFromServer(doc(db, 'test', 'connection'));
     return { connected: true, message: 'Terhubung ke Cloud Firestore' };
   } catch (error: any) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn("Client is offline, using IndexedDB/Local storage fallback.");
-      return { connected: false, message: 'Klien sedang offline (Menggunakan penyimpanan lokal/IndexedDB)' };
+    const errMsg = error instanceof Error ? error.message : String(error);
+    const errCode = (error as any)?.code;
+
+    if (
+      errCode === 'unavailable' ||
+      errMsg.includes('the client is offline') ||
+      errMsg.includes('Could not reach Cloud Firestore') ||
+      errMsg.includes('Connection failed') ||
+      errMsg.includes('Failed to get document')
+    ) {
+      console.warn("Client is offline or Cloud Firestore is unreachable. Using IndexedDB/Local storage fallback.");
+      return { connected: false, message: 'Offline Mode (Menggunakan penyimpanan lokal/IndexedDB)' };
     }
-    // If permission or document does not exist, Firestore endpoint itself responded
-    if (error?.code === 'permission-denied' || error?.message?.includes('Missing or insufficient permissions')) {
+
+    // If permission or document does not exist, Firestore endpoint itself responded (meaning we are connected)
+    if (errCode === 'permission-denied' || errMsg.includes('Missing or insufficient permissions')) {
       return { connected: true, message: 'Firestore terhubung (Aturan keamanan aktif)' };
     }
-    return { connected: true, message: 'Firestore terhubung' };
+
+    return { connected: false, message: 'Cloud Firestore tidak terjangkau (Offline Mode)' };
   }
 }
 
