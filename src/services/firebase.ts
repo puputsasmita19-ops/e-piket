@@ -35,7 +35,7 @@ const firebaseConfig = {
 export const app: FirebaseApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
 // The canonical database ID for this AI Studio project
-export const FIRESTORE_DATABASE_ID: string | undefined = (firebaseConfigData as any).firestoreDatabaseId || undefined;
+export const FIRESTORE_DATABASE_ID: string = (firebaseConfigData as any).firestoreDatabaseId || 'ai-studio-336ecc13-2c88-4579-80d0-9b4b604d0208';
 
 // Initialize Firestore with specific databaseId (if specified) and safe ignoreUndefinedProperties setting
 let firestoreInstance: Firestore;
